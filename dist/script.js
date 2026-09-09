@@ -51,6 +51,17 @@ function setupReveals() {
   elements.forEach(element => revealObserver.observe(element));
 }
 setupReveals();
+const contactSection = document.querySelector('.contact');
+if (contactSection && 'IntersectionObserver' in window) {
+  const contactObserver = new IntersectionObserver(entries => {
+    if (entries.some(entry => entry.isIntersecting)) {
+      contactSection.classList.add('contact-entered');
+      contactObserver.disconnect();
+    }
+  }, { threshold: .15 });
+  contactObserver.observe(contactSection);
+}
+
 let pointerFrame = 0;
 hero.addEventListener('pointermove', event => {
   if (reduce.matches || !finePointer.matches || innerWidth <= 760) return;
