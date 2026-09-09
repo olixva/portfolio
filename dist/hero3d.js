@@ -131,6 +131,7 @@ function start() {
   // que alimenta a la vez la lámpara y el centro de la deformación.
   function trackPointer() {
     const ao = window.aoPointer;
+    if (!LOOK.lamp && !LOOK.deform && !LOOK.follow) return;
     if (!ao || !ao.active) {
       targetAmp = 0;
       lamp.intensity += (0 - lamp.intensity) * 0.08;
@@ -145,7 +146,7 @@ function start() {
     const reach = hit.distanceTo(stage.position);
     const near = Math.max(0, 1 - reach / 1.9);
     lamp.intensity += (near * LOOK.lamp - lamp.intensity) * 0.09;
-    targetAmp = near;
+    targetAmp = near * LOOK.deform;
 
     if (model) uniforms.uTouch.value.lerp(model.worldToLocal(hit.clone()), 0.2);
     aim.x = ndc.x;
@@ -161,7 +162,7 @@ function start() {
     uniforms.uAmp.value += (targetAmp - uniforms.uAmp.value) * Math.min(1, delta * 3.2);
 
     if (!introRunning) {
-      const follow = finePointer.matches && !isMobile() ? 1 : 0;
+      const follow = finePointer.matches && !isMobile() ? LOOK.follow : 0;
       const targetY = aim.x * 0.55 * follow + Math.sin(time * 0.3) * 0.1;
       const targetX = -aim.y * 0.3 * follow + Math.sin(time * 0.24) * 0.06 + scrollTilt;
       tilt.rotation.y += (targetY - tilt.rotation.y) * Math.min(1, delta * 2.4);

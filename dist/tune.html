@@ -131,7 +131,7 @@ addEventListener('pointermove', e => {
     lamp.position.set(hit.x, hit.y, 1.4);
     const near = Math.max(0, 1 - hit.length()/1.9);
     lamp.intensity = near * look.lamp;
-    uniforms.uAmp.value = near;
+    uniforms.uAmp.value = near * look.deform;
     uniforms.uTouch.value.copy(hit).multiplyScalar(1/ (2.05/1.9));
   }
 });
@@ -171,7 +171,9 @@ const FIELDS = [
     ['keyLight', 'Luz principal', 0, 5, .05],
     ['rimLight', 'Contraluz ácido', 0, 5, .05],
     ['ambient', 'Ambiente', 0, 1, .01],
-    ['lamp', 'Lámpara del cursor', 0, 20, .2]
+    ['lamp', 'Lámpara del cursor', 0, 20, .2],
+    ['deform', 'Deformación al acercarte', 0, 1, .01],
+    ['follow', 'La pieza sigue al puntero', 0, 1, .01]
   ]],
   ['Bloom', [
     ['bloomStrength', 'Fuerza', 0, 2, .01],

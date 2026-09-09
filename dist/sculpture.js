@@ -7,22 +7,25 @@ export const ACID = '#dcff54';
 
 export const LOOK = {
   // Material
-  tint: '#c4c9cd',       // color del metal
-  saturation: 0.15,      // 0 = acero puro, 1 = el dorado original del render
+  tint: '#cdd2d6',       // color del metal
+  saturation: 0,      // 0 = acero puro, 1 = el dorado original del render
   useBaseMap: true,      // usar el mapa de color del modelo (aporta detalle)
   roughness: 0.35,       // multiplica el mapa de rugosidad del modelo
   metalness: 1,
-  envIntensity: 1.5,
+  envIntensity: 1.25,
   rim: 0.22,             // filo ácido por fresnel
   // Escena
   exposure: 1.1,
   keyLight: 1.6,
-  rimLight: 1.4,
+  rimLight: 0.55,
   ambient: 0.18,
-  lamp: 6,               // lámpara del cursor
+  // Reacción al puntero. A cero, el ratón no hace nada cerca de la pieza.
+  lamp: 0,               // lámpara del cursor: ilumina el metal al acercarte
+  deform: 0,             // deformación de la superficie al acercarte
+  follow: 1,             // 1 = la pieza gira siguiendo al puntero
   // Entorno
-  envSun: 8,             // tira principal
-  envAcid: 6,            // tira ácida
+  envSun: 9,             // tira principal
+  envAcid: 1.6,          // tira ácida: acento en un canto, no tinte general
   envFill: 4,            // relleno frontal
   horizon: 0.6,          // altura del corte cielo/suelo
   ground: 0.14,          // claridad del suelo (0 = negro)
