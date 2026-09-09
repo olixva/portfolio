@@ -83,11 +83,11 @@ function restPose(camera) {
   const distance = 3.6;
   const halfHeight = Math.tan((camera.fov * Math.PI / 180) / 2) * distance;
   const halfWidth = halfHeight * camera.aspect;
-  const share = isMobile() ? 0.86 : 0.52;   // cuanto del ancho ocupa la pieza
+  const share = isMobile() ? 0.78 : 0.52;   // cuanto del ancho ocupa la pieza
   const scale = Math.min(0.95, (halfWidth * 2 * share) / PIECE_WIDTH);
-  // En movil sube por detras del titular, para no cruzarse con el parrafo.
-  const y = isMobile() ? halfHeight * 0.62 : 0;
-  return { x: isMobile() ? 0 : halfWidth * 0.46, y, scale, z: distance };
+  // En movil el lienzo es ya una banda propia arriba: la pieza va centrada en
+  // ella. En escritorio se recuesta a la derecha del titular.
+  return { x: isMobile() ? 0 : halfWidth * 0.46, y: 0, scale, z: distance };
 }
 
 // --- Arranque -----------------------------------------------------------
@@ -228,7 +228,7 @@ function start() {
     gsap.timeline({ defaults: { ease: 'power3.inOut' }, onComplete: () => { introRunning = false; } })
       .to(canvas, { opacity: 1, duration: 0.6, ease: 'power2.out' }, 0)
       .to(tilt.rotation, { y: 0, x: 0, z: 0, duration: 2.1, ease: 'power3.out' }, 0)
-      .fromTo(uniforms.uRim, { value: 1.1 }, { value: 0.22, duration: 1.8, ease: 'power2.out' }, 0)
+      .fromTo(uniforms.uRim, { value: 0.85 }, { value: LOOK.rim, duration: 1.8, ease: 'power2.out' }, 0)
       .to(camera.position, { z: pose.z, duration: 1.5 }, mobile ? 0.9 : 1.15)
       .to(stage.position, { x: pose.x, y: pose.y, duration: 1.3 }, mobile ? 0.9 : 1.15)
       .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration: 1.3 }, mobile ? 0.9 : 1.15)
@@ -282,15 +282,20 @@ function start() {
     });
     addEventListener('resize', resize);
 
-    // Arrastrar sobre el lienzo para girar la pieza a mano.
-    canvas.addEventListener('pointerdown', event => {
+    // Arrastrar para girar la pieza a mano. Los oyentes van en el hero, no en
+    // el lienzo: el lienzo esta debajo de .hero-content, asi que escuchando ahi
+    // solo se podia agarrar por los bordes que el texto dejaba libres.
+    hero.addEventListener('pointerdown', event => {
       if (event.button !== 0 || introRunning) return;
+      // Lo pulsable manda: no se secuestra el clic de un enlace ni una seleccion.
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('a,button,summary,input,textarea,[role="button"]')) return;
       drag.on = true; drag.id = event.pointerId;
       drag.x = event.clientX; drag.y = event.clientY;
-      canvas.setPointerCapture(event.pointerId);
+      hero.setPointerCapture(event.pointerId);
       root.classList.add('ao3d-dragging');
     });
-    canvas.addEventListener('pointermove', event => {
+    hero.addEventListener('pointermove', event => {
       if (!drag.on || event.pointerId !== drag.id) return;
       drag.yaw += (event.clientX - drag.x) * 0.007;
       drag.pitch += (event.clientY - drag.y) * 0.007;
@@ -303,8 +308,8 @@ function start() {
       drag.on = false; drag.id = null;
       root.classList.remove('ao3d-dragging');
     };
-    canvas.addEventListener('pointerup', endDrag);
-    canvas.addEventListener('pointercancel', endDrag);
+    hero.addEventListener('pointerup', endDrag);
+    hero.addEventListener('pointercancel', endDrag);
     addEventListener('blur', endDrag);
     addEventListener('scroll', () => {
       measure();

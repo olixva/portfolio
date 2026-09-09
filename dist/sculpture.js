@@ -9,27 +9,27 @@ export const LOOK = {
   // Material
   tint: '#cdd2d6',       // color del metal
   useBaseMap: false,     // el mapa de color trae horneado el dorado del render
-  roughness: 0.38,       // multiplica el mapa de rugosidad del modelo
+  roughness: 0.5,       // multiplica el mapa de rugosidad del modelo
   metalness: 1,
-  envIntensity: 0.72,
-  rim: 0.22,             // filo ácido por fresnel
+  envIntensity: 0.6,
+  rim: 0.16,             // filo ácido por fresnel
   // Escena
-  exposure: 1.15,
-  keyLight: 0.55,
+  exposure: 1.05,
+  keyLight: 0.4,
   rimLight: 0.3,
   ambient: 0.07,
   // Reacción al puntero. A cero, el ratón no hace nada cerca de la pieza.
-  lamp: 5.5,             // lámpara del cursor: es la luz principal de la escena
+  lamp: 3,             // lámpara del cursor: es la luz principal de la escena
   deform: 0,             // deformación de la superficie al acercarte
   follow: 1,             // 1 = la pieza gira siguiendo al puntero
   // Entorno
-  envSun: 5,             // tira principal
-  envAcid: 1.6,          // tira ácida: acento en un canto, no tinte general
-  envFill: 1.6,          // relleno frontal
+  envSun: 2.4,             // tira principal
+  envAcid: 1,          // tira ácida: acento en un canto, no tinte general
+  envFill: 1,          // relleno frontal
   horizon: 0.6,          // altura del corte cielo/suelo
   ground: 0.14,          // claridad del suelo (0 = negro)
   // Bloom
-  bloomStrength: 0.22,
+  bloomStrength: 0.12,
   bloomRadius: 0.45,
   bloomThreshold: 1.05
 };

@@ -3,8 +3,10 @@
   transition:opacity .6s ease;touch-action:pan-y}
 html.ao3d-on .ao3d-canvas{opacity:1}
 /* Sin cursor propio (movil, movimiento reducido) hace falta la pista visual. */
-html:not(.spark-active) .ao3d-canvas{cursor:grab}
-html:not(.spark-active).ao3d-dragging .ao3d-canvas{cursor:grabbing}
+html:not(.spark-active).ao3d-on .hero{cursor:grab}
+html:not(.spark-active).ao3d-dragging .hero{cursor:grabbing}
+html:not(.spark-active).ao3d-on .hero a,
+html:not(.spark-active).ao3d-on .hero summary{cursor:pointer}
 html.ao3d-on .hero .ao-visual,
 html.ao3d-pending .hero .ao-visual{display:none}
 
@@ -14,12 +16,23 @@ html.ao3d-pending .hero .ao-visual{display:none}
 html.ao3d-intro .hero .hero-content{opacity:0!important;pointer-events:none}
 html.ao3d-intro .hero .line>span{animation:none!important}
 
-/* En movil el hero centra el texto y compact.css manda el visual detras, a
-   opacidad baja. El lienzo sigue esa misma regla: como banda superior a plena
-   opacidad se solapaba 135px con el titular. */
+/* En movil el modelo no comparte sitio con el titular: ocupa una banda propia
+   arriba y el texto empieza justo debajo, centrado. Antes iba detras del
+   titular a opacidad baja y se solapaban las letras. */
 @media(max-width:760px){
-  .ao3d-canvas{inset:0;height:100%}
-  html.ao3d-on .ao3d-canvas{opacity:.36}
+  html.ao3d-on .hero,
+  html.ao3d-pending .hero{--ao3d-band:clamp(260px,42svh,360px)}
+  .ao3d-canvas{inset:0 0 auto;height:var(--ao3d-band,300px);touch-action:pan-y}
+  html.ao3d-on .hero,
+  html.ao3d-pending .hero{padding-top:calc(var(--ao3d-band) + 26px);text-align:center}
+  html.ao3d-on .hero-eyebrow,
+  html.ao3d-pending .hero-eyebrow{justify-content:center}
+  html.ao3d-on .hero-description,
+  html.ao3d-pending .hero-description{margin-inline:auto}
+  html.ao3d-on .hero-description p,
+  html.ao3d-pending .hero-description p{margin-inline:auto}
+  html.ao3d-on .hero-bottom,
+  html.ao3d-pending .hero-bottom{text-align:left}
 }
 @media(prefers-reduced-motion:reduce){
   .ao3d-canvas{transition:none}
