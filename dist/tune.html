@@ -154,7 +154,6 @@ const clock = new THREE.Clock();
 const FIELDS = [
   ['Material', [
     ['tint', 'Color del metal', 'color'],
-    ['saturation', 'Saturación del mapa (0 acero, 1 oro)', 0, 1, .01],
     ['useBaseMap', 'Usar el mapa de color del modelo', 'check'],
     ['roughness', 'Rugosidad', 0, 1, .01],
     ['metalness', 'Metalicidad', 0, 1, .01],
@@ -226,7 +225,6 @@ function update(name) {
   bloom.radius = look.bloomRadius;
   bloom.threshold = look.bloomThreshold;
   uniforms.uRim.value = look.rim;
-  uniforms.uSat.value = look.saturation;
   for (const m of materials) {
     m.map = look.useBaseMap ? m.userData.baseMap : null;
     m.color.set(look.tint);

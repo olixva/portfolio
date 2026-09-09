@@ -42,6 +42,22 @@
    Los dos temporizadores son la red de seguridad por si el modulo no arranca. */
 (function(){
   var root = document.documentElement, webgl = false;
+
+  /* Al recargar, el navegador restaura el scroll anterior; como el hero cambia
+     de altura mientras carga, ese desplazamiento cae mas abajo y la pagina
+     aparece en Hackathons. Con hash en la URL no se toca nada. */
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  if (!location.hash) {
+    var toTop = function () { scrollTo(0, 0); };
+    addEventListener('load', function () {
+      // Chrome puede restaurar el scroll despues de 'load', cuando la
+      // maquetacion termina de asentarse: hay que insistir un par de veces.
+      toTop();
+      requestAnimationFrame(toTop);
+      setTimeout(toTop, 120);
+    });
+  }
+
   try { webgl = !!document.createElement('canvas').getContext('webgl2'); } catch (e) {}
   if (!webgl) return;
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;

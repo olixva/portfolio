@@ -8,9 +8,8 @@ export const ACID = '#dcff54';
 export const LOOK = {
   // Material
   tint: '#cdd2d6',       // color del metal
-  saturation: 0,      // 0 = acero puro, 1 = el dorado original del render
-  useBaseMap: true,      // usar el mapa de color del modelo (aporta detalle)
-  roughness: 0.26,       // multiplica el mapa de rugosidad del modelo
+  useBaseMap: false,     // el mapa de color trae horneado el dorado del render
+  roughness: 0.38,       // multiplica el mapa de rugosidad del modelo
   metalness: 1,
   envIntensity: 0.72,
   rim: 0.22,             // filo ácido por fresnel
@@ -20,7 +19,7 @@ export const LOOK = {
   rimLight: 0.3,
   ambient: 0.07,
   // Reacción al puntero. A cero, el ratón no hace nada cerca de la pieza.
-  lamp: 16,              // lámpara del cursor: es la luz principal de la escena
+  lamp: 5.5,             // lámpara del cursor: es la luz principal de la escena
   deform: 0,             // deformación de la superficie al acercarte
   follow: 1,             // 1 = la pieza gira siguiendo al puntero
   // Entorno
@@ -30,9 +29,9 @@ export const LOOK = {
   horizon: 0.6,          // altura del corte cielo/suelo
   ground: 0.14,          // claridad del suelo (0 = negro)
   // Bloom
-  bloomStrength: 0.4,
+  bloomStrength: 0.22,
   bloomRadius: 0.45,
-  bloomThreshold: 0.9
+  bloomThreshold: 1.05
 };
 
 // El acero solo existe si hay algo que reflejar. Cúpula con horizonte marcado
@@ -83,7 +82,7 @@ export function buildEnvironment(renderer, look = LOOK) {
   box(ACID, look.envAcid, 0.8, 7, [4.6, 0.2, 1.2], [0, -Math.PI / 2.6, -0.18]);
   box('#ffffff', look.envFill, 1.6, 9, [1.6, 1.4, 6.6], [0, Math.PI, 0.55]);
   box('#ffffff', look.envFill * 0.4, 0.9, 8, [-2.4, -0.6, 6.2], [0, Math.PI, -0.5]);
-  box('#ffb06a', 2.2, 5, 1.4, [1.0, -3.6, 2.2], [-Math.PI / 2.6, 0, 0]);
+  box('#c9cec4', 1.4, 5, 1.4, [1.0, -3.6, 2.2], [-Math.PI / 2.6, 0, 0]);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   const env = pmrem.fromScene(scene, 0.02).texture;
@@ -115,13 +114,8 @@ export function applySteel(material, uniforms, look = LOOK) {
         transformed += objectNormal * sin(uTime * 0.8 + transformed.x * 2.6) * 0.004;
       `);
 
-    shader.fragmentShader = 'uniform vec3 uRimColor;\nuniform float uRim;\nuniform float uSat;\n'
+    shader.fragmentShader = 'uniform vec3 uRimColor;\nuniform float uRim;\n'
       + shader.fragmentShader
-        .replace('#include <map_fragment>', `
-          #include <map_fragment>
-          float lum = dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722));
-          diffuseColor.rgb = mix(vec3(lum), diffuseColor.rgb, uSat);
-        `)
         .replace('#include <dithering_fragment>', `
           #include <dithering_fragment>
           float fresnel = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 3.2);
@@ -138,7 +132,6 @@ export function makeUniforms(look = LOOK) {
     uTime: { value: 0 },
     uRadius: { value: 0.55 },
     uRimColor: { value: new THREE.Color(ACID) },
-    uRim: { value: look.rim },
-    uSat: { value: look.saturation }
+    uRim: { value: look.rim }
   };
 }
