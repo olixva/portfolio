@@ -8,7 +8,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=fresnel-finite-1';
+import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=777567cb';
 
 const MODEL = 'assets/ao-sculpture.glb';
 

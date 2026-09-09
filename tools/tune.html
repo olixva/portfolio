@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Ajuste de la escultura</title>
-<base href="../dist/">
-<link rel="stylesheet" href="style.css">
+<base href="../public/">
+<link rel="stylesheet" href="css/01-base.css">
 <style>
 body{margin:0;overflow:hidden;background:#111210}
 #view{position:fixed;inset:0;width:100%;height:100%}
@@ -65,7 +65,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js';
+import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './js/hero/sculpture.js';
 
 const BASE = JSON.parse(JSON.stringify(LOOK));
 const look = JSON.parse(JSON.stringify(LOOK));

@@ -1,10 +1,14 @@
-"""Validate authored JS syntax and local HTML/CSS resource paths."""
+"""Comprueba la sintaxis del JavaScript propio y que los recursos locales existan."""
 from pathlib import Path
 from html.parser import HTMLParser
 from urllib.parse import urlsplit, unquote
 import re
 import subprocess
+import sys
 import tempfile
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from stamp import stamp
 
 ROOT = Path(__file__).resolve().parents[1]
 errors = []
@@ -27,7 +31,7 @@ def reference(value, base):
     if url.scheme or url.netloc or not url.path:
         return
     path = unquote(url.path)
-    target = ROOT / 'dist' / path.lstrip('/') if path.startswith('/') else base / path
+    target = ROOT / 'public' / path.lstrip('/') if path.startswith('/') else base / path
     if not target.exists():
         errors.append(f'{base.relative_to(ROOT)}: missing {value}')
 
@@ -59,14 +63,18 @@ class Page(HTMLParser):
             self.script = None
 
 
-for path in sorted((ROOT / 'dist').glob('*.js')):
-    javascript(path.read_text(), path.name)
-for folder in ('dist', 'tools'):
-    for path in sorted((ROOT / folder).glob('*.html')):
+for path in sorted((ROOT / 'public' / 'js').rglob('*.js')):
+    javascript(path.read_text(), str(path.relative_to(ROOT)))
+for folder in ('public', 'tools', 'design'):
+    for path in sorted((ROOT / folder).rglob('*.html')):
         Page(path).feed(path.read_text())
-for path in sorted((ROOT / 'dist').glob('*.css')):
+for path in sorted((ROOT / 'public' / 'css').glob('*.css')):
     for value in re.findall(r'url\(\s*[\'\"]?([^\'\")]+)', path.read_text()):
         reference(value.strip(), path.parent)
+stale = stamp(write=False)
+if stale:
+    errors.append('huellas de cache sin actualizar en ' + ', '.join(map(str, stale))
+                  + '\n  ejecuta: python3 scripts/stamp.py')
 if errors:
     raise SystemExit('\n'.join(errors))
-print(f'OK: {checked} JavaScript files/blocks; local HTML/CSS resources exist.')
+print(f'OK: {checked} bloques de JavaScript; recursos locales y huellas de cache al dia.')

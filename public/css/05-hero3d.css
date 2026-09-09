@@ -1,0 +1,23 @@
+/* Capa WebGL del hero. Si no arranca, manda el fallback CSS de la
+   escultura en 04-sections. */
+.ao3d-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;z-index:0;opacity:0;transition:opacity .6s ease;touch-action:pan-y}
+html.ao3d-on .ao3d-canvas{opacity:1}
+/* Sin cursor propio (movil, movimiento reducido) hace falta la pista visual. */
+html:not(.spark-active).ao3d-on .hero{cursor:grab}
+html:not(.spark-active).ao3d-dragging .hero{cursor:grabbing}
+html:not(.spark-active).ao3d-on .hero a{cursor:pointer}
+html:not(.spark-active).ao3d-on .hero summary{cursor:pointer}
+/* Todo el hero es agarradera, asi que arrastrar no debe pintar una seleccion. */
+html.ao3d-on .hero{-webkit-user-select:none;user-select:none}
+html.ao3d-on .hero .ao-visual{display:none}
+html.ao3d-pending .hero .ao-visual{display:none}
+/* Durante la intro el titular espera fuera de plano. El !important es
+   deliberado: 03-components fija .hero-content{opacity:1!important}. */
+.hero .hero-content{transition:opacity .7s ease .05s}
+html.ao3d-intro .hero .hero-content{opacity:0!important;pointer-events:none}
+html.ao3d-intro .hero .line>span{animation:none!important}
+/* En movil el modelo no comparte sitio con el titular: ocupa una banda propia
+   arriba y el texto empieza justo debajo, centrado. Antes iba detras del
+   titular a opacidad baja y se solapaban las letras. */
+@media(max-width:760px){.ao3d-canvas{inset:0 0 auto;height:var(--ao3d-band,300px);touch-action:pan-y}html.ao3d-on .hero{--ao3d-band:clamp(260px,42svh,360px);padding-top:calc(var(--ao3d-band) + 26px);text-align:center}html.ao3d-pending .hero{--ao3d-band:clamp(260px,42svh,360px);padding-top:calc(var(--ao3d-band) + 26px);text-align:center}html.ao3d-on .hero-eyebrow{justify-content:center}html.ao3d-pending .hero-eyebrow{justify-content:center}html.ao3d-on .hero-description{margin-inline:auto}html.ao3d-pending .hero-description{margin-inline:auto}html.ao3d-on .hero-description p{margin-inline:auto}html.ao3d-pending .hero-description p{margin-inline:auto}html.ao3d-on .hero-bottom{text-align:left}html.ao3d-pending .hero-bottom{text-align:left}}
+@media(prefers-reduced-motion:reduce){.ao3d-canvas{transition:none}.hero .hero-content{transition:none}}
