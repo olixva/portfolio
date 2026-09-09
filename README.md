@@ -42,6 +42,7 @@ Pruebas de navegador (Chrome y Playwright disponibles):
 
 ```sh
 NODE_PATH=/ruta/a/node_modules node scripts/test-intro.cjs http://localhost:8000
+NODE_PATH=/ruta/a/node_modules node scripts/test-hero-layout.cjs http://localhost:8000
 ```
 
 ## Herramientas

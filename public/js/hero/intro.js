@@ -15,6 +15,8 @@ export function prepareIntro(enabled) {
   const ended = new Promise(resolve => { resolveEnded = resolve; });
   const finish = () => { if (!finished) { finished = true; resolveEnded(); } };
   video.muted = true;
+  video.defaultPlaybackRate = 2;
+  video.playbackRate = 2;
   video.addEventListener('ended', finish, { once: true });
   video.addEventListener('error', finish, { once: true });
   const timer = setTimeout(() => { controller.abort(); finish(); }, 45000);

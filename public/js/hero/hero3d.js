@@ -10,7 +10,7 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=9ecd0025';
 
-import { prepareIntro } from './intro.js?v=1af12126';
+import { prepareIntro } from './intro.js?v=01099b69';
 
 const MODEL = 'assets/ao-sculpture.glb';
 
@@ -203,7 +203,7 @@ function start() {
     frame = 0;
     const delta = Math.min(clock.getDelta(), 0.05);
     const time = Math.max(0, clock.elapsedTime - settledAt);
-    uniforms.uTime.value = time;
+    uniforms.uTime.value = clock.elapsedTime;
     if (!introRunning) trackPointer();
     uniforms.uAmp.value += (targetAmp - uniforms.uAmp.value) * Math.min(1, delta * 3.2);
 
@@ -306,12 +306,12 @@ function start() {
     const pose = restPose(camera);
     introTimeline = gsap.timeline({ defaults: { ease: 'power3.inOut' }, onComplete: finishIntro })
       .to(intro.video, { opacity: 0, duration: 0.5, ease: 'power1.inOut' }, 0)
-      .to(intro.overlay.querySelector('.ao-intro-backdrop'), { opacity: 0, duration: 0.5 }, 0)
-      .to(tilt.rotation, { z: 0, duration: 1.5 }, 0.5)
-      .to(stage.position, { x: pose.x, y: pose.y, duration: 1.7 }, 0.5)
-      .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration: 1.7 }, 0.5)
+      .set(intro.overlay.querySelector('.ao-intro-backdrop'), { opacity: 0 }, 0)
+      .to(tilt.rotation, { z: 0, duration: 1.7 }, 0.6)
+      .to(stage.position, { x: pose.x, y: pose.y, duration: 1.7 }, 0.6)
+      .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration: 1.7 }, 0.6)
       .to(uniforms.uEnvironmentMix, { value: 1, duration: 1.4 }, 0.6)
-      .to(uniforms.uIntroProjection, { value: 0, duration: 0.8 }, 0.35)
+      .to(uniforms.uIntroProjection, { value: 0, duration: 0.5 }, 0.1)
       .to(uniforms.uBaseMix, { value: 0.18, duration: 1.4 }, 0.6)
       .to(uniforms.uRim, { value: LOOK.rim, duration: 1.2 }, 0.8)
       .to(rim, { intensity: LOOK.rimLight, duration: 1.2 }, 0.8)
@@ -381,7 +381,10 @@ function start() {
       visible ? play() : pause();
       if (document.hidden && transitioning) finishIntro();
     });
-    addEventListener('resize', () => { if (transitioning && introRunning) finishIntro(); else resize(); });
+    addEventListener('resize', () => {
+      if (transitioning && introRunning) finishIntro();
+      resize();
+    });
 
     // Arrastrar para girar la pieza a mano. Los oyentes van en el hero, no en
     // el lienzo: el lienzo esta debajo de .hero-content, asi que escuchando ahi

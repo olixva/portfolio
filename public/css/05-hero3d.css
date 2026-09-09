@@ -2,6 +2,7 @@
    escultura en 04-sections. */
 .ao3d-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;z-index:0;opacity:0;transition:opacity .6s ease;touch-action:pan-y}
 html.ao3d-on .ao3d-canvas{opacity:1}
+html.ao3d-intro .ao3d-canvas,html.ao3d-revealing .ao3d-canvas{transition:none}
 /* Sin cursor propio (movil, movimiento reducido) hace falta la pista visual. */
 html:not(.spark-active).ao3d-on .hero{cursor:grab}
 html:not(.spark-active).ao3d-dragging .hero{cursor:grabbing}

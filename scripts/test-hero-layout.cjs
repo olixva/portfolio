@@ -18,10 +18,17 @@ const assert = require('node:assert/strict');
         assert.ok(first.videoWidth <= 1100, `Desktop video is oversized: ${first.videoWidth}`);
       }
       assert.equal(first.parent, 'hero', 'Keep the WebGL canvas in its final container during playback');
+      await page.waitForSelector('html.ao3d-revealing');
+      assert.equal(await page.locator('.ao3d-canvas').evaluate(el => getComputedStyle(el).opacity), '1', 'Replacement frame must be fully visible before fading the video');
       await page.waitForSelector('.ao-intro', { state: 'detached' });
       const last = await page.locator('.ao3d-canvas').evaluate(el => el.getBoundingClientRect().toJSON());
       assert.deepEqual(last, first.canvas, 'Handoff must not resize or move the canvas');
       await page.screenshot({ path: `/tmp/portfolio-fixed-${width}.png` });
+      if (width === 1440) {
+        await page.setViewportSize({ width: 2560, height: 1440 });
+        await page.waitForFunction(() => Math.abs(document.querySelector('.hero').getBoundingClientRect().bottom - innerHeight) <= 1);
+        assert.equal(await page.locator('.ao3d-canvas').evaluate(el => Math.round(el.getBoundingClientRect().width)), 2560);
+      }
       console.log(`OK: stable canvas and proportions at ${width}×${height}`);
       await page.close();
     }
