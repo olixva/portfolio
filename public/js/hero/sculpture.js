@@ -8,7 +8,7 @@ export const ACID = '#dcff54';
 export const LOOK = {
   // Material
   tint: '#cdd2d6',       // color del metal
-  useBaseMap: false,     // el mapa de color trae horneado el dorado del render
+  useBaseMap: false,     // conserva opcionalmente el color horneado del modelo
   roughness: 0.5,       // multiplica el mapa de rugosidad del modelo
   metalness: 1,
   envIntensity: 0.7,
@@ -52,7 +52,7 @@ export function buildEnvironment(renderer, look = LOOK) {
   grad.addColorStop(h - 0.035, '#7d8375');
   grad.addColorStop(h + 0.012, '#' + floor.getHexString());
   grad.addColorStop(1, '#171914');
-  c.fillStyle = grad;
+  c.fillStyle = look.studio ? '#080807' : grad;
   c.fillRect(0, 0, 8, 2048);
   const texture = new THREE.CanvasTexture(sky);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -79,9 +79,9 @@ export function buildEnvironment(renderer, look = LOOK) {
   // Softboxes: son las bandas que se ven viajar por el metal al girar.
   box('#ffffff', look.envSun, 1.3, 8, [-4.6, 2.0, 2.2], [0, Math.PI / 2.6, 0.22]);
   box('#ffffff', look.envSun * 0.45, 0.5, 7, [-3.0, 3.2, 4.4], [0, Math.PI / 4, 0.5]);
-  box(ACID, look.envAcid, 0.8, 7, [4.6, 0.2, 1.2], [0, -Math.PI / 2.6, -0.18]);
+  box(look.envAccent || ACID, look.envAcid, 0.8, 7, [4.6, 0.2, 1.2], [0, -Math.PI / 2.6, -0.18]);
   box('#ffffff', look.envFill, 1.6, 9, [1.6, 1.4, 6.6], [0, Math.PI, 0.55]);
-  box('#ffffff', look.envFill * 0.4, 0.9, 8, [-2.4, -0.6, 6.2], [0, Math.PI, -0.5]);
+  box(look.envAccent || '#ffffff', look.envFill * 0.4, 0.9, 8, [-2.4, -0.6, 6.2], [0, Math.PI, -0.5]);
   box('#c9cec4', 1.4, 5, 1.4, [1.0, -3.6, 2.2], [-Math.PI / 2.6, 0, 0]);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -91,11 +91,10 @@ export function buildEnvironment(renderer, look = LOOK) {
   return env;
 }
 
-// Injerta en el material del modelo: desaturación del mapa de color (el
-// original trae el dorado horneado), desplazamiento de vértices y filo ácido.
+// Injerta en el material del modelo: mezcla del mapa de color horneado, desplazamiento de vértices y filo ácido.
 export function applySteel(material, uniforms, look = LOOK) {
   if (!material.userData.baseMap) material.userData.baseMap = material.map;
-  material.map = look.useBaseMap ? material.userData.baseMap : null;
+  material.map = look.useBaseMap || uniforms.uBaseMix ? material.userData.baseMap : null;
   material.color = new THREE.Color(look.tint);
   material.metalness = look.metalness;
   material.roughness = look.roughness;
@@ -114,8 +113,14 @@ export function applySteel(material, uniforms, look = LOOK) {
         transformed += objectNormal * sin(uTime * 0.8 + transformed.x * 2.6) * 0.004;
       `);
 
-    shader.fragmentShader = 'uniform vec3 uRimColor;\nuniform float uRim;\n'
+    shader.fragmentShader = 'uniform float uBaseMix;\nuniform vec3 uRimColor;\nuniform float uRim;\n'
       + shader.fragmentShader
+        .replace('#include <map_fragment>', `
+          #ifdef USE_MAP
+            vec4 sampledDiffuseColor = texture2D(map, vMapUv);
+            diffuseColor *= mix(vec4(1.0), sampledDiffuseColor, uBaseMix);
+          #endif
+        `)
         .replace('#include <dithering_fragment>', `
           #include <dithering_fragment>
           // La normalización en GPU puede producir dot > 1 por redondeo.
@@ -131,6 +136,7 @@ export function applySteel(material, uniforms, look = LOOK) {
 
 export function makeUniforms(look = LOOK) {
   return {
+    uBaseMix: { value: look.useBaseMap ? 1 : 0 },
     uTouch: { value: new THREE.Vector3(0, 0, 99) },
     uAmp: { value: 0 },
     uTime: { value: 0 },

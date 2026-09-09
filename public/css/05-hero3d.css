@@ -21,3 +21,23 @@ html.ao3d-intro .hero .line>span{animation:none!important}
    titular a opacidad baja y se solapaban las letras. */
 @media(max-width:760px){.ao3d-canvas{inset:0 0 auto;height:var(--ao3d-band,300px);touch-action:pan-y}html.ao3d-on .hero{--ao3d-band:clamp(260px,42svh,360px);padding-top:calc(var(--ao3d-band) + 26px);text-align:center}html.ao3d-pending .hero{--ao3d-band:clamp(260px,42svh,360px);padding-top:calc(var(--ao3d-band) + 26px);text-align:center}html.ao3d-on .hero-eyebrow{justify-content:center}html.ao3d-pending .hero-eyebrow{justify-content:center}html.ao3d-on .hero-description{margin-inline:auto}html.ao3d-pending .hero-description{margin-inline:auto}html.ao3d-on .hero-description p{margin-inline:auto}html.ao3d-pending .hero-description p{margin-inline:auto}html.ao3d-on .hero-bottom{text-align:left}html.ao3d-pending .hero-bottom{text-align:left}}
 @media(prefers-reduced-motion:reduce){.ao3d-canvas{transition:none}.hero .hero-content{transition:none}}
+/* Vídeo y WebGL comparten exactamente el mismo rectángulo durante el relevo. */
+html.ao3d-intro{overflow:hidden}
+html.ao3d-intro .header,html.ao3d-revealing .header{z-index:70}
+html.ao3d-intro .skip:focus{z-index:80}
+html.ao3d-intro:not(.ao3d-revealing) body:before{content:"";position:fixed;inset:0;background:#000;z-index:59}
+.ao-intro{position:fixed;inset:76px 0 0;z-index:60;pointer-events:none}
+.ao-intro-backdrop{position:absolute;inset:0;background:#000}
+.ao-intro video{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(82vw,1100px);height:min(72dvh,620px);object-fit:contain;transition:none}
+.ao-intro video{z-index:2;opacity:0}
+.ao-intro.is-playing video{opacity:1}
+.hero{transition:background-color 1.1s ease}
+html.ao3d-intro:not(.ao3d-revealing) .hero{background-color:#000}
+.ao-intro-loader{position:absolute;bottom:8%;left:50%;z-index:3;animation:loader-appear .3s .25s both}
+.ao-intro-loader i{display:block;width:18px;height:18px;margin-left:-9px;border:1px solid #ffffff30;border-top-color:#e2c699;border-radius:50%;animation:loader-spin .8s linear infinite}
+.ao-intro-play{position:absolute;left:50%;top:75%;transform:translateX(-50%);z-index:4;pointer-events:auto;background:#111;border:1px solid #e2c699;color:#eee;padding:12px 28px;font:inherit;cursor:pointer}
+.ao-intro [hidden]{display:none}
+@keyframes loader-spin{to{transform:rotate(360deg)}}
+@keyframes loader-appear{from{opacity:0}to{opacity:1}}
+
+@media(max-width:760px){.ao-intro{top:68px}.ao-intro video{top:calc(clamp(260px,42svh,360px) / 2);width:94vw;height:clamp(260px,42svh,360px)}}

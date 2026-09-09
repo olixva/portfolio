@@ -33,7 +33,16 @@ Se cargan en orden y **ese orden importa**: `01-base` (variables, reinicio, tipo
 - `js/ui.js`: acordeones, cinta de tecnologías y menú móvil.
 - `js/cursor.js`: cursor y halo.
 - `js/hero/hero3d.js`: carga, render, interacción y presentación del hero.
+- `js/hero/intro.js`: precarga del vídeo, reproducción y espera del último fotograma.
 - `js/hero/sculpture.js`: material y entorno, compartidos con el panel de ajuste.
+
+La entrada reproduce `assets/intro.mp4` en cada recarga, con la cabecera visible. El vídeo se descarga completo y el GLB carga en paralelo. El relevo espera la compilación del 3D y las fuentes; el último fotograma se proyecta brevemente sobre el modelo para conservar los reflejos mientras cambia la iluminación de dorado a verde. Con movimiento reducido se muestra directamente el modelo. Si el navegador bloquea la reproducción, aparece «Entrar».
+
+Pruebas de navegador (Chrome y Playwright disponibles):
+
+```sh
+NODE_PATH=/ruta/a/node_modules node scripts/test-intro.cjs http://localhost:8000
+```
 
 ## Herramientas
 
@@ -65,7 +74,7 @@ Revisión visual: giro del hero en Chrome y Safari, cursor, recarga desde una se
 
 ## Publicación
 
-Se publica `public/` tal cual. `.github/workflows/pages.yml` lo hace en cada empujón a `main`: comprueba y sube la carpeta como artefacto de GitHub Pages. Sólo hay que activar Pages en modo *GitHub Actions* la primera vez. Las rutas relativas admiten subdirectorios.
+Se publica `public/` tal cual, sin build. El proyecto de Cloudflare Pages está conectado directamente al repositorio de GitHub: cada empujón a `main` dispara un despliegue automático (directorio de salida: `public/`, sin comando de build). Las rutas relativas admiten subdirectorios.
 
 Con el dominio definitivo, configura `og:url`, `og:image` y `twitter:image` con URL absolutas en `index.html`. La imagen social es `public/assets/og.jpg` y su plantilla está en `design/og-card.html`.
 
