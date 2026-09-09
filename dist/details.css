@@ -4,7 +4,6 @@
 .skills-track{animation:none!important;will-change:transform;transform:translate3d(0,0,0)}
 .skills-track>div{min-width:100vw;flex-shrink:0;gap:clamp(45px,5vw,90px);padding-right:clamp(45px,5vw,90px);justify-content:space-around}
 .skills-track span{font-size:clamp(18px,2.1vw,30px);letter-spacing:-.8px;color:#d6dbca;font-weight:500}
-.skills-track span:nth-child(even){color:#969e88}
 .other-hackathons{margin-top:45px}.other-hackathons .section-intro{margin-bottom:28px}
 .other-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;align-items:start}
 .other-card{padding:28px;border:1px solid var(--line);border-radius:12px;min-width:0}
@@ -23,14 +22,9 @@
 @media(pointer:coarse),(prefers-reduced-motion:reduce){.cursor-surface:before{display:none}}
 @media(prefers-reduced-motion:reduce){.skills-track{transform:none!important;will-change:auto}.skills-window{mask-image:none;overflow:auto}.skills-track>div{min-width:0}}
 
-/* --- Banda de skills: un punto más de vida sin romper la sobriedad --- */
-.skills-strip{position:relative;isolation:isolate;border-top:1px solid #dcff5440}
-/* Foco central: aclara el término que cruza el centro y apaga los laterales. */
-.skills-strip:after{content:'';position:absolute;inset:0;pointer-events:none;z-index:2;mix-blend-mode:screen;background:radial-gradient(58% 150% at 50% 50%,#dcff541f,#dcff5400 72%)}
-.skills-track span{display:inline-flex;align-items:center;gap:14px;transition:color .3s}
-.skills-track span:before{content:'';flex:none;width:5px;height:5px;background:var(--acid);opacity:.65;transform:rotate(45deg)}
+/* --- Banda de tecnologias: solo los nombres y el aire entre ellos. ---------
+   Sin rombos, sin ordinales y sin resplandor: lo que separa los terminos es la
+   distancia, que ya la fija el gap de la pista. */
+.skills-strip{position:relative;border-top:1px solid #dcff5440}
+.skills-track span{transition:color .3s}
 .skills-strip .skills-track span:hover{color:var(--acid)}
-@media(max-width:760px){
-  .skills-track span{gap:10px}
-  .skills-track span:before{width:4px;height:4px}
-}
