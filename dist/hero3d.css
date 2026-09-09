@@ -1,6 +1,10 @@
 /* Capa WebGL del hero. Si no arranca, manda orbit.css (fallback CSS). */
-.ao3d-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;z-index:0;pointer-events:none;opacity:0;transition:opacity .6s ease}
+.ao3d-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;z-index:0;opacity:0;
+  transition:opacity .6s ease;touch-action:pan-y}
 html.ao3d-on .ao3d-canvas{opacity:1}
+/* Sin cursor propio (movil, movimiento reducido) hace falta la pista visual. */
+html:not(.spark-active) .ao3d-canvas{cursor:grab}
+html:not(.spark-active).ao3d-dragging .ao3d-canvas{cursor:grabbing}
 html.ao3d-on .hero .ao-visual,
 html.ao3d-pending .hero .ao-visual{display:none}
 

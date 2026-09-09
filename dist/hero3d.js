@@ -48,7 +48,7 @@ function createScene(canvas) {
 
   // La lámpara del cursor: es lo que hace que mover el ratón mueva los
   // reflejos por el metal, en vez de limitarse a girar la pieza.
-  const lamp = new THREE.PointLight(ACID, 0, 6, 2);
+  const lamp = new THREE.PointLight(ACID, 0, 9, 2);
   lamp.position.set(0, 0, 1.4);
   scene.add(lamp);
 
@@ -115,10 +115,13 @@ function start() {
   let introRunning = false, visible = true, frame = 0;
   let scrollTilt = 0, targetAmp = 0;
   const aim = { x: 0, y: 0 };
+  const drag = { on: false, x: 0, y: 0, yaw: 0, pitch: 0, id: null };
   const clock = new THREE.Clock();
   const raycaster = new THREE.Raycaster();
   const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
   const hit = new THREE.Vector3();
+  const local = new THREE.Vector3();
+  const inverse = new THREE.Matrix4();
   const ndc = new THREE.Vector2();
 
   function applyRest() {
@@ -128,12 +131,23 @@ function start() {
     camera.position.z = pose.z;
   }
 
+  // La geometria del lienzo se cachea: leerla en cada fotograma fuerza un
+  // recalculo de estilo y provoca tirones.
+  let rect = canvas.getBoundingClientRect();
+  let lastW = 0, lastH = 0, lastDpr = 0;
+
+  function measure() { rect = canvas.getBoundingClientRect(); }
+
   function resize() {
-    const rect = canvas.getBoundingClientRect();
-    const width = Math.max(1, rect.width), height = Math.max(1, rect.height);
+    measure();
+    const width = Math.max(1, Math.round(rect.width));
+    const height = Math.max(1, Math.round(rect.height));
+    const dpr = Math.min(devicePixelRatio, isMobile() ? 1.5 : 2);
+    if (width === lastW && height === lastH && dpr === lastDpr) return;
+    lastW = width; lastH = height; lastDpr = dpr;
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
-    renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile() ? 1.5 : 2));
+    renderer.setPixelRatio(dpr);
     renderer.setSize(width, height, false);
     composer.setSize(width, height);
     bloom.enabled = !isMobile();
@@ -150,18 +164,21 @@ function start() {
       lamp.intensity += (0 - lamp.intensity) * 0.08;
       return;
     }
-    const rect = canvas.getBoundingClientRect();
     ndc.set(((ao.x - rect.left) / rect.width) * 2 - 1, -((ao.y - rect.top) / rect.height) * 2 + 1);
     raycaster.setFromCamera(ndc, camera);
     if (!raycaster.ray.intersectPlane(plane, hit)) return;
 
     lamp.position.set(hit.x, hit.y, 1.4);
+    // La lampara sigue al puntero por todo el hero: la caida la da su propio
+    // alcance, no un recorte por distancia, para que el reflejo tenga recorrido.
+    lamp.intensity += (LOOK.lamp - lamp.intensity) * 0.12;
     const reach = hit.distanceTo(stage.position);
-    const near = Math.max(0, 1 - reach / 1.9);
-    lamp.intensity += (near * LOOK.lamp - lamp.intensity) * 0.09;
-    targetAmp = near * LOOK.deform;
+    targetAmp = Math.max(0, 1 - reach / 1.9) * LOOK.deform;
 
-    if (model) uniforms.uTouch.value.lerp(model.worldToLocal(hit.clone()), 0.2);
+    if (model && LOOK.deform) {
+      inverse.copy(model.matrixWorld).invert();
+      uniforms.uTouch.value.lerp(local.copy(hit).applyMatrix4(inverse), 0.2);
+    }
     aim.x = ndc.x;
     aim.y = ndc.y;
   }
@@ -175,11 +192,19 @@ function start() {
     uniforms.uAmp.value += (targetAmp - uniforms.uAmp.value) * Math.min(1, delta * 3.2);
 
     if (!introRunning) {
-      const follow = finePointer.matches && !isMobile() ? LOOK.follow : 0;
-      const targetY = aim.x * 0.55 * follow + Math.sin(time * 0.3) * 0.1;
-      const targetX = -aim.y * 0.3 * follow + Math.sin(time * 0.24) * 0.06 + scrollTilt;
-      tilt.rotation.y += (targetY - tilt.rotation.y) * Math.min(1, delta * 2.4);
-      tilt.rotation.x += (targetX - tilt.rotation.x) * Math.min(1, delta * 2.4);
+      // Al soltar, el giro manual vuelve a cero y la pieza retoma su deriva.
+      if (!drag.on) {
+        const back = 1 - Math.pow(0.12, delta);
+        drag.yaw -= drag.yaw * back;
+        drag.pitch -= drag.pitch * back;
+      }
+      // Mientras se arrastra, el seguimiento del puntero no compite.
+      const follow = drag.on ? 0 : (finePointer.matches && !isMobile() ? LOOK.follow : 0);
+      const targetY = aim.x * 0.55 * follow + Math.sin(time * 0.3) * 0.1 + drag.yaw;
+      const targetX = -aim.y * 0.3 * follow + Math.sin(time * 0.24) * 0.06 + scrollTilt + drag.pitch;
+      const ease = Math.min(1, delta * (drag.on ? 14 : 2.4));
+      tilt.rotation.y += (targetY - tilt.rotation.y) * ease;
+      tilt.rotation.x += (targetX - tilt.rotation.x) * ease;
     }
 
     composer.render();
@@ -256,8 +281,33 @@ function start() {
       }
     });
     addEventListener('resize', resize);
+
+    // Arrastrar sobre el lienzo para girar la pieza a mano.
+    canvas.addEventListener('pointerdown', event => {
+      if (event.button !== 0 || introRunning) return;
+      drag.on = true; drag.id = event.pointerId;
+      drag.x = event.clientX; drag.y = event.clientY;
+      canvas.setPointerCapture(event.pointerId);
+      root.classList.add('ao3d-dragging');
+    });
+    canvas.addEventListener('pointermove', event => {
+      if (!drag.on || event.pointerId !== drag.id) return;
+      drag.yaw += (event.clientX - drag.x) * 0.007;
+      drag.pitch += (event.clientY - drag.y) * 0.007;
+      drag.pitch = Math.max(-0.9, Math.min(0.9, drag.pitch));
+      drag.x = event.clientX; drag.y = event.clientY;
+      play();
+    });
+    const endDrag = event => {
+      if (!drag.on || (event && event.pointerId !== drag.id)) return;
+      drag.on = false; drag.id = null;
+      root.classList.remove('ao3d-dragging');
+    };
+    canvas.addEventListener('pointerup', endDrag);
+    canvas.addEventListener('pointercancel', endDrag);
+    addEventListener('blur', endDrag);
     addEventListener('scroll', () => {
-      const rect = hero.getBoundingClientRect();
+      measure();
       if (rect.bottom > 0) scrollTilt = Math.max(-0.45, Math.min(0, rect.top * 0.001));
     }, { passive: true });
 
