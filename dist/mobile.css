@@ -1,0 +1,57 @@
+/* Compact layouts use their available width, not desktop type sizes. */
+@media (max-width: 800px) {
+  html { scroll-padding-top: 24px; }
+  header { position: relative; height: 76px; padding: 0 6%; gap: 16px; background: #090909; }
+  .brand { font-size: 34px; flex-shrink: 0; }
+  nav { gap: clamp(12px, 3vw, 24px); font-size: 14px; }
+  nav a { display: inline-flex; align-items: center; min-height: 44px; white-space: nowrap; }
+  .hero { display: block; min-height: 0; height: auto; padding: 230px 6% 28px; }
+  .art { inset: 0 0 auto; height: 345px; background-position: 78% 45%; background-size: cover; opacity: 1; transform: none; }
+  .shade { background: linear-gradient(180deg, transparent 90px, #090909 335px); }
+  .hero-content { min-width: 0; }
+  .hero .eyebrow { font-size: 12px; letter-spacing: 1px; margin-bottom: 20px; }
+  h1 { font-size: clamp(2.65rem, 10.7vw, 5.5rem); line-height: .98; letter-spacing: -.025em; overflow-wrap: anywhere; }
+  .lead { font-size: clamp(1.35rem, 5.5vw, 1.8rem); line-height: 1.3; margin: 22px 0 16px; max-width: 28rem; }
+  .intro { max-width: 30rem; line-height: 1.65; }
+  .desktop { display: none; }
+  .actions { flex-wrap: wrap; gap: 16px 25px; margin-top: 25px; }
+  .button { min-height: 50px; padding: 14px 20px; font-size: 14px; gap: 22px; }
+  .text-link { display: inline-flex; align-items: center; min-height: 44px; }
+  .hero-bottom { position: static; margin-top: 38px; gap: 18px; flex-wrap: wrap; font-size: 12px; letter-spacing: 1px; }
+  .stack { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 10px; padding: 24px 6%; text-align: center; font-size: 12px; letter-spacing: .5px; }
+  .section { padding: 58px 6%; }
+  h2 { font-size: clamp(2.75rem, 11.5vw, 4.5rem); line-height: 1; overflow-wrap: anywhere; }
+  .section-heading { margin-bottom: 30px; }
+  .section-heading > p { max-width: 36rem; }
+  .project-grid { gap: 28px; }
+  .project { min-width: 0; }
+  .project-top { height: auto; min-height: 250px; padding: 22px; gap: 24px; }
+  .project-number { font-size: 12px; letter-spacing: .7px; }
+  .project-display { font-size: clamp(2.6rem, 10vw, 4.8rem); line-height: .98; overflow-wrap: anywhere; }
+  .project-display span { display: none; }
+  .project:hover .project-display { transform: none; }
+  .award { font-size: 12px; line-height: 1.6; }
+  .project-body { padding: 23px; }
+  h3 { font-size: 22px; overflow-wrap: anywhere; }
+  .project-body details summary { min-height: 48px; }
+  .tags { gap: 12px; line-height: 1.6; }
+  .about-grid { gap: 30px; }
+  .about-grid > div, .timeline li > div, .education > div { min-width: 0; }
+  .timeline { margin-top: 32px; }
+  .timeline h3 { font-size: 27px; line-height: 1.35; }
+  .date { font-size: 13px; }
+  .contact h2 { font-size: clamp(2.65rem, 10.5vw, 4.8rem); line-height: 1.06; }
+  .email { display: block; max-width: 100%; font-size: 15px; padding-bottom: 10px; }
+  .contact-links a { display: inline-flex; align-items: center; min-height: 44px; }
+  footer { padding: 22px 6%; flex-wrap: wrap; }
+}
+@media (max-width: 360px) {
+  header { gap: 10px; }
+  nav { gap: 12px; font-size: 12px; }
+  .hero { padding-top: 205px; }
+  .art { height: 305px; }
+  .shade { background: linear-gradient(180deg, transparent 65px, #090909 295px); }
+  .actions { align-items: stretch; gap: 10px; }
+  .button { width: 100%; justify-content: space-between; }
+  .actions .text-link { align-self: flex-start; }
+}

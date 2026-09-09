@@ -1,0 +1,18 @@
+/* Capa WebGL del hero. Si no arranca, manda orbit.css (fallback CSS). */
+.ao3d-canvas{position:absolute;inset:0;display:block;width:100%;height:100%;z-index:0;pointer-events:none;opacity:0;transition:opacity .6s ease}
+html.ao3d-on .ao3d-canvas{opacity:1}
+html.ao3d-on .hero .ao-visual{display:none}
+
+/* Durante la intro el titular espera fuera de plano. El !important es
+   deliberado: compact.css fija .hero-content{opacity:1!important}. */
+.hero .hero-content{transition:opacity .7s ease .05s}
+html.ao3d-intro .hero .hero-content{opacity:0!important;pointer-events:none}
+html.ao3d-intro .hero .line>span{animation:none!important}
+
+@media(max-width:760px){
+  .ao3d-canvas{inset:0 0 auto 0;height:clamp(240px,42svh,360px)}
+}
+@media(prefers-reduced-motion:reduce){
+  .ao3d-canvas{transition:none}
+  .hero .hero-content{transition:none}
+}
