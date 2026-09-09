@@ -8,8 +8,8 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js';
 
-const ACID = '#dcff54';
 const MODEL = 'assets/ao-sculpture.glb';
 
 const root = document.documentElement;
@@ -22,89 +22,6 @@ const wantsIntro = root.classList.contains('ao3d-intro');
 
 const releaseContent = () => root.classList.remove('ao3d-intro');
 
-// --- Entorno de reflejos ------------------------------------------------
-// El acero solo existe si hay algo que reflejar. Cúpula con horizonte marcado
-// más tiras: sin ese corte brusco entre cielo y suelo, las superficies planas
-// devuelven un gris uniforme y la pieza parece plástico.
-
-function buildEnvironment(renderer) {
-  const scene = new THREE.Scene();
-  const sky = document.createElement('canvas');
-  sky.width = 4; sky.height = 512;
-  const c = sky.getContext('2d');
-  const grad = c.createLinearGradient(0, 0, 0, 512);
-  grad.addColorStop(0.00, '#ffffff');
-  grad.addColorStop(0.34, '#e7ebe0');
-  grad.addColorStop(0.58, '#7d8375');
-  grad.addColorStop(0.62, '#23261c');
-  grad.addColorStop(1.00, '#0a0b08');
-  c.fillStyle = grad;
-  c.fillRect(0, 0, 4, 512);
-  const texture = new THREE.CanvasTexture(sky);
-  texture.colorSpace = THREE.SRGBColorSpace;
-
-  const dome = new THREE.Mesh(
-    new THREE.SphereGeometry(12, 32, 32),
-    new THREE.MeshBasicMaterial({ map: texture, side: THREE.BackSide })
-  );
-  scene.add(dome);
-
-  const strip = (color, intensity, w, h, position, rotation) => {
-    const mesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(w, h),
-      new THREE.MeshBasicMaterial({ color: new THREE.Color(color).multiplyScalar(intensity) })
-    );
-    mesh.position.set(...position);
-    mesh.rotation.set(...rotation);
-    scene.add(mesh);
-  };
-  strip('#ffffff', 8, 1.1, 8, [-4.6, 2.0, 2.4], [0, Math.PI / 2.6, 0.22]);
-  strip(ACID, 7, 0.8, 7, [4.6, 0.2, 1.2], [0, -Math.PI / 2.6, -0.18]);
-  strip('#ffffff', 6, 1.8, 9, [1.6, 1.4, 6.6], [0, Math.PI, 0.55]);
-  strip('#ffffff', 2.5, 1.0, 8, [-2.4, -0.6, 6.2], [0, Math.PI, -0.5]);
-  strip('#ffb06a', 2.6, 5, 1.4, [1.0, -3.6, 2.2], [-Math.PI / 2.6, 0, 0]);
-
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  const env = pmrem.fromScene(scene, 0.02).texture;
-  pmrem.dispose();
-  dome.geometry.dispose();
-  return env;
-}
-
-// --- Material -----------------------------------------------------------
-// Se descarta el mapa de color base, que lleva horneado el dorado del render
-// original: el acabado lo dan el entorno y las luces, así el acento es el de
-// la web. Se le injerta el desplazamiento de vértices y un filo ácido.
-
-function patchMaterial(material, uniforms) {
-  material.map = null;
-  material.color = new THREE.Color(0xc4c9cd);
-  material.metalness = 1;
-  material.roughness = 0.4;
-  material.envMapIntensity = 2.15;
-
-  material.onBeforeCompile = shader => {
-    Object.assign(shader.uniforms, uniforms);
-    shader.vertexShader = 'uniform vec3 uTouch;\nuniform float uAmp;\nuniform float uTime;\nuniform float uRadius;\n'
-      + shader.vertexShader.replace('#include <begin_vertex>', `
-        #include <begin_vertex>
-        float touchDist = distance(transformed, uTouch);
-        float falloff = exp(-(touchDist * touchDist) / (uRadius * uRadius));
-        float ripple = sin(touchDist * 13.0 - uTime * 5.5);
-        transformed += objectNormal * (uAmp * falloff * ripple * 0.075);
-        transformed += objectNormal * sin(uTime * 0.8 + transformed.x * 2.6) * 0.004;
-      `);
-
-    shader.fragmentShader = 'uniform vec3 uRimColor;\nuniform float uRim;\n'
-      + shader.fragmentShader.replace('#include <dithering_fragment>', `
-        #include <dithering_fragment>
-        float fresnel = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 3.2);
-        gl_FragColor.rgb += uRimColor * fresnel * uRim;
-      `);
-  };
-  material.needsUpdate = true;
-}
-
 // --- Escena -------------------------------------------------------------
 
 function createScene(canvas) {
@@ -113,19 +30,19 @@ function createScene(canvas) {
   });
   renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile() ? 1.5 : 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.22;
+  renderer.toneMappingExposure = LOOK.exposure;
 
   const scene = new THREE.Scene();
-  scene.environment = buildEnvironment(renderer);
+  scene.environment = buildEnvironment(renderer, LOOK);
 
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 60);
   camera.position.set(0, 0, 3.6);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.28));
-  const key = new THREE.DirectionalLight(0xffffff, 2.2);
+  scene.add(new THREE.AmbientLight(0xffffff, LOOK.ambient));
+  const key = new THREE.DirectionalLight(0xffffff, LOOK.keyLight);
   key.position.set(-3, 3, 4);
   scene.add(key);
-  const rim = new THREE.DirectionalLight(ACID, 1.8);
+  const rim = new THREE.DirectionalLight(ACID, LOOK.rimLight);
   rim.position.set(4, -1.2, -2);
   scene.add(rim);
 
@@ -135,14 +52,7 @@ function createScene(canvas) {
   lamp.position.set(0, 0, 1.4);
   scene.add(lamp);
 
-  const uniforms = {
-    uTouch: { value: new THREE.Vector3(0, 0, 99) },
-    uAmp: { value: 0 },
-    uTime: { value: 0 },
-    uRadius: { value: 0.55 },
-    uRimColor: { value: new THREE.Color(ACID) },
-    uRim: { value: 0.22 }
-  };
+  const uniforms = makeUniforms(LOOK);
 
   const stage = new THREE.Group();   // pose: intro → reposo
   const tilt = new THREE.Group();    // giro hacia el puntero
@@ -151,7 +61,7 @@ function createScene(canvas) {
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.4, 0.45, 0.9);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), LOOK.bloomStrength, LOOK.bloomRadius, LOOK.bloomThreshold);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -181,6 +91,7 @@ function start() {
     ctx = createScene(canvas);
   } catch (error) {
     canvas.remove();
+    root.classList.remove('ao3d-pending');
     console.warn('Hero 3D no disponible, se usa el fallback CSS:', error);
     releaseContent();
     return;
@@ -233,7 +144,7 @@ function start() {
     lamp.position.set(hit.x, hit.y, 1.4);
     const reach = hit.distanceTo(stage.position);
     const near = Math.max(0, 1 - reach / 1.9);
-    lamp.intensity += (near * 6 - lamp.intensity) * 0.09;
+    lamp.intensity += (near * LOOK.lamp - lamp.intensity) * 0.09;
     targetAmp = near;
 
     if (model) uniforms.uTouch.value.lerp(model.worldToLocal(hit.clone()), 0.2);
@@ -288,7 +199,7 @@ function start() {
   const draco = new DRACOLoader().setDecoderPath('vendor/three/addons/libs/draco/gltf/');
   new GLTFLoader().setDRACOLoader(draco).load(MODEL, gltf => {
     model = gltf.scene;
-    model.traverse(node => { if (node.isMesh) patchMaterial(node.material, uniforms); });
+    model.traverse(node => { if (node.isMesh) applySteel(node.material, uniforms, LOOK); });
 
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
@@ -300,6 +211,7 @@ function start() {
 
     resize();
     root.classList.add('ao3d-on');
+    root.classList.remove('ao3d-pending');
 
     if (reduceMotion.matches) {
       tilt.rotation.set(-0.05, -0.3, 0);
@@ -330,7 +242,7 @@ function start() {
   }, undefined, error => {
     console.warn('No se pudo cargar la escultura, se usa el fallback CSS:', error);
     canvas.remove();
-    root.classList.remove('ao3d-on');
+    root.classList.remove('ao3d-on', 'ao3d-pending');
     releaseContent();
   });
 }

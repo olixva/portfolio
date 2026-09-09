@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Ajuste de la escultura</title>
+<link rel="stylesheet" href="style.css">
+<style>
+body{margin:0;overflow:hidden;background:#111210}
+#view{position:fixed;inset:0;width:100%;height:100%}
+#panel{
+  position:fixed;top:0;right:0;bottom:0;width:320px;z-index:5;overflow-y:auto;
+  background:#0d0e0cf2;border-left:1px solid #ffffff26;padding:18px 20px 40px;
+  font:13px/1.5 'DM Sans',Arial,sans-serif;color:#f1f2e9;backdrop-filter:blur(8px);
+}
+#panel h1{margin:0 0 4px;font-size:16px;font-weight:500;letter-spacing:-.3px}
+#panel p.help{margin:0 0 18px;color:#9c9f94;font-size:12px;line-height:1.5}
+fieldset{border:0;border-top:1px solid #ffffff1f;margin:0 0 4px;padding:16px 0 6px}
+legend{padding:0 8px 0 0;font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:#dcff54}
+label{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;margin-bottom:11px}
+label span{color:#c5cab9}
+label output{font-variant-numeric:tabular-nums;color:#dcff54;font-size:12px}
+input[type=range]{grid-column:1/-1;width:100%;accent-color:#dcff54;margin:2px 0 0}
+input[type=color]{grid-column:2;width:44px;height:24px;padding:0;border:1px solid #ffffff26;background:none;border-radius:4px}
+label.check{grid-template-columns:1fr auto}
+input[type=checkbox]{accent-color:#dcff54;width:16px;height:16px}
+.actions{display:flex;gap:8px;margin-top:18px;flex-wrap:wrap}
+button{
+  font:inherit;font-size:12px;color:#111210;background:#dcff54;border:0;border-radius:100px;
+  padding:9px 16px;cursor:pointer;font-weight:500;
+}
+button.ghost{background:transparent;color:#f1f2e9;border:1px solid #ffffff40}
+#out{
+  margin-top:14px;width:100%;height:150px;background:#000;color:#dcff54;border:1px solid #ffffff26;
+  border-radius:6px;padding:10px;font:11px/1.5 ui-monospace,Menlo,monospace;resize:vertical;display:none;
+}
+#hint{position:fixed;left:22px;bottom:20px;z-index:5;color:#7e8375;font:12px 'DM Sans',Arial,sans-serif}
+</style>
+</head>
+<body>
+<canvas id="view"></canvas>
+<p id="hint">Arrastra para girar · rueda para acercar · mueve el ratón para iluminar</p>
+<div id="panel">
+  <h1>Ajuste de la escultura</h1>
+  <p class="help">Mueve los valores hasta que te guste, dale a <b>Copiar valores</b> y pégamelos:
+  los dejo fijos en <code>sculpture.js</code> y el hero saldrá exactamente así.</p>
+  <div id="controls"></div>
+  <div class="actions">
+    <button id="copy">Copiar valores</button>
+    <button class="ghost" id="reset">Volver a los actuales</button>
+  </div>
+  <textarea id="out" readonly spellcheck="false"></textarea>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js';
+
+const BASE = JSON.parse(JSON.stringify(LOOK));
+const look = JSON.parse(JSON.stringify(LOOK));
+
+const canvas = document.getElementById('view');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(32, 1, .1, 60);
+camera.position.set(0, 0, 3.6);
+
+const ambient = new THREE.AmbientLight(0xffffff, look.ambient); scene.add(ambient);
+const key = new THREE.DirectionalLight(0xffffff, look.keyLight); key.position.set(-3,3,4); scene.add(key);
+const rimLight = new THREE.DirectionalLight(ACID, look.rimLight); rimLight.position.set(4,-1.2,-2); scene.add(rimLight);
+const lamp = new THREE.PointLight(ACID, 0, 6, 2); lamp.position.set(0,0,1.4); scene.add(lamp);
+
+const uniforms = makeUniforms(look);
+const tilt = new THREE.Group(); scene.add(tilt);
+let materials = [];
+
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(1,1), look.bloomStrength, look.bloomRadius, look.bloomThreshold);
+composer.addPass(bloom);
+composer.addPass(new OutputPass());
+
+function rebuildEnv() {
+  if (scene.environment) scene.environment.dispose();
+  scene.environment = buildEnvironment(renderer, look);
+}
+rebuildEnv();
+
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+  renderer.setSize(w,h,false); composer.setSize(w,h);
+}
+addEventListener('resize', resize); resize();
+
+const draco = new DRACOLoader().setDecoderPath('vendor/three/addons/libs/draco/gltf/');
+new GLTFLoader().setDRACOLoader(draco).load('assets/ao-sculpture.glb', gltf => {
+  const model = gltf.scene;
+  model.traverse(n => { if (n.isMesh) { applySteel(n.material, uniforms, look); materials.push(n.material); } });
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  model.position.sub(box.getCenter(new THREE.Vector3()));
+  model.scale.setScalar(2.05/size.x);
+  tilt.add(model);
+  draco.dispose();
+});
+
+// Órbita a mano: no merece la pena traerse OrbitControls solo para esto.
+let drag = false, px = 0, py = 0, yaw = 0, pitch = 0;
+canvas.addEventListener('pointerdown', e => { drag = true; px = e.clientX; py = e.clientY; });
+addEventListener('pointerup', () => drag = false);
+addEventListener('pointermove', e => {
+  if (drag) { yaw += (e.clientX-px)*.006; pitch += (e.clientY-py)*.006; px = e.clientX; py = e.clientY; }
+  const ndc = new THREE.Vector2((e.clientX/innerWidth)*2-1, -(e.clientY/innerHeight)*2+1);
+  const ray = new THREE.Raycaster(); ray.setFromCamera(ndc, camera);
+  const hit = new THREE.Vector3();
+  if (ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0,0,1),0), hit)) {
+    lamp.position.set(hit.x, hit.y, 1.4);
+    const near = Math.max(0, 1 - hit.length()/1.9);
+    lamp.intensity = near * look.lamp;
+    uniforms.uAmp.value = near;
+    uniforms.uTouch.value.copy(hit).multiplyScalar(1/ (2.05/1.9));
+  }
+});
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  camera.position.z = Math.max(1.6, Math.min(8, camera.position.z + e.deltaY*.002));
+}, {passive:false});
+
+const clock = new THREE.Clock();
+(function tick(){
+  uniforms.uTime.value = clock.getElapsedTime();
+  tilt.rotation.y = yaw; tilt.rotation.x = pitch;
+  composer.render();
+  requestAnimationFrame(tick);
+})();
+
+// --- Panel -------------------------------------------------------------
+const FIELDS = [
+  ['Material', [
+    ['tint', 'Color del metal', 'color'],
+    ['saturation', 'Saturación del mapa (0 acero, 1 oro)', 0, 1, .01],
+    ['useBaseMap', 'Usar el mapa de color del modelo', 'check'],
+    ['roughness', 'Rugosidad', 0, 1, .01],
+    ['metalness', 'Metalicidad', 0, 1, .01],
+    ['envIntensity', 'Fuerza del entorno', 0, 4, .05],
+    ['rim', 'Filo ácido', 0, 1.5, .01]
+  ]],
+  ['Entorno', [
+    ['horizon', 'Altura del horizonte', .2, .9, .01],
+    ['ground', 'Claridad del suelo', 0, 1, .01],
+    ['envSun', 'Softbox principal', 0, 20, .2],
+    ['envAcid', 'Softbox ácido', 0, 20, .2],
+    ['envFill', 'Relleno frontal', 0, 20, .2]
+  ]],
+  ['Luces', [
+    ['exposure', 'Exposición', .3, 2.5, .01],
+    ['keyLight', 'Luz principal', 0, 5, .05],
+    ['rimLight', 'Contraluz ácido', 0, 5, .05],
+    ['ambient', 'Ambiente', 0, 1, .01],
+    ['lamp', 'Lámpara del cursor', 0, 20, .2]
+  ]],
+  ['Bloom', [
+    ['bloomStrength', 'Fuerza', 0, 2, .01],
+    ['bloomRadius', 'Radio', 0, 1.5, .01],
+    ['bloomThreshold', 'Umbral', 0, 1.2, .01]
+  ]]
+];
+
+const controls = document.getElementById('controls');
+const inputs = {};
+for (const [title, rows] of FIELDS) {
+  const set = document.createElement('fieldset');
+  set.innerHTML = '<legend>' + title + '</legend>';
+  for (const row of rows) {
+    const [name, label, a, b, step] = row;
+    const wrap = document.createElement('label');
+    if (a === 'color') {
+      wrap.innerHTML = '<span>' + label + '</span><input type="color" value="' + look[name] + '">';
+    } else if (a === 'check') {
+      wrap.className = 'check';
+      wrap.innerHTML = '<span>' + label + '</span><input type="checkbox"' + (look[name] ? ' checked' : '') + '>';
+    } else {
+      wrap.innerHTML = '<span>' + label + '</span><output>' + look[name] + '</output>'
+        + '<input type="range" min="' + a + '" max="' + b + '" step="' + step + '" value="' + look[name] + '">';
+    }
+    const input = wrap.querySelector('input');
+    inputs[name] = input;
+    input.addEventListener('input', () => {
+      look[name] = input.type === 'checkbox' ? input.checked
+                 : input.type === 'color' ? input.value
+                 : parseFloat(input.value);
+      const out = wrap.querySelector('output');
+      if (out) out.textContent = look[name];
+      update(name);
+    });
+    set.append(wrap);
+  }
+  controls.append(set);
+}
+
+function update(name) {
+  if (['horizon','ground','envSun','envAcid','envFill'].includes(name)) rebuildEnv();
+  renderer.toneMappingExposure = look.exposure;
+  ambient.intensity = look.ambient;
+  key.intensity = look.keyLight;
+  rimLight.intensity = look.rimLight;
+  bloom.strength = look.bloomStrength;
+  bloom.radius = look.bloomRadius;
+  bloom.threshold = look.bloomThreshold;
+  uniforms.uRim.value = look.rim;
+  uniforms.uSat.value = look.saturation;
+  for (const m of materials) {
+    m.map = look.useBaseMap ? m.userData.baseMap : null;
+    m.color.set(look.tint);
+    m.roughness = look.roughness;
+    m.metalness = look.metalness;
+    m.envMapIntensity = look.envIntensity;
+    m.needsUpdate = true;
+  }
+}
+update();
+
+document.getElementById('copy').addEventListener('click', async () => {
+  const text = Object.keys(BASE).map(k =>
+    '  ' + k + ': ' + (typeof look[k] === 'string' ? "'" + look[k] + "'" : look[k])).join(',\n');
+  const out = document.getElementById('out');
+  out.style.display = 'block';
+  out.value = 'export const LOOK = {\n' + text + '\n};';
+  out.select();
+  try { await navigator.clipboard.writeText(out.value); } catch (e) {}
+});
+
+document.getElementById('reset').addEventListener('click', () => {
+  Object.assign(look, JSON.parse(JSON.stringify(BASE)));
+  for (const [name, input] of Object.entries(inputs)) {
+    if (input.type === 'checkbox') input.checked = look[name];
+    else input.value = look[name];
+    const out = input.closest('label').querySelector('output');
+    if (out) out.textContent = look[name];
+  }
+  rebuildEnv();
+  update();
+});
+</script>
+</body>
+</html>

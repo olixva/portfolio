@@ -33,18 +33,29 @@
 {"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}
 </script>
 <script>
-/* Decide de forma sincrona si toca la intro del hero, para que el titular no
-   parpadee. Si el modulo no llegase a arrancar, el temporizador lo libera. */
+/* Decide de forma sincrona, antes de pintar nada:
+   - ao3d-pending oculta el hero CSS de apoyo desde el primer fotograma, para
+     que no se vea mientras se descarga el modelo. Si el 3D falla, hero3d.js
+     quita la clase y el apoyo reaparece.
+   - ao3d-intro reserva el titular para la entrada. Con ?intro en la URL la
+     entrada se repite siempre, que si no solo se ve una vez por sesion.
+   Los dos temporizadores son la red de seguridad por si el modulo no arranca. */
 (function(){
   var root = document.documentElement, webgl = false;
   try { webgl = !!document.createElement('canvas').getContext('webgl2'); } catch (e) {}
+  if (!webgl) return;
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  root.classList.add('ao3d-pending');
+  setTimeout(function () { root.classList.remove('ao3d-pending'); }, 10000);
+
+  var forced = /[?&#]intro\b/.test(location.search + location.hash);
   var seen = false;
   try { seen = sessionStorage.getItem('ao3d-intro') === '1'; } catch (e) {}
-  if (webgl && !reduce && !seen) {
+  if (!reduce && (forced || !seen)) {
     root.classList.add('ao3d-intro');
     try { sessionStorage.setItem('ao3d-intro', '1'); } catch (e) {}
-    setTimeout(function () { root.classList.remove('ao3d-intro'); }, 3500);
+    setTimeout(function () { root.classList.remove('ao3d-intro'); }, 12000);
   }
 })();
 </script>
