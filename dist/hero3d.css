@@ -10,8 +10,12 @@ html.ao3d-pending .hero .ao-visual{display:none}
 html.ao3d-intro .hero .hero-content{opacity:0!important;pointer-events:none}
 html.ao3d-intro .hero .line>span{animation:none!important}
 
+/* En movil el hero centra el texto y compact.css manda el visual detras, a
+   opacidad baja. El lienzo sigue esa misma regla: como banda superior a plena
+   opacidad se solapaba 135px con el titular. */
 @media(max-width:760px){
-  .ao3d-canvas{inset:0 0 auto 0;height:clamp(240px,42svh,360px)}
+  .ao3d-canvas{inset:0;height:100%}
+  html.ao3d-on .ao3d-canvas{opacity:.36}
 }
 @media(prefers-reduced-motion:reduce){
   .ao3d-canvas{transition:none}

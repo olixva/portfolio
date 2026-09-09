@@ -42,21 +42,24 @@ export function buildEnvironment(renderer, look = LOOK) {
   const scene = new THREE.Scene();
 
   const sky = document.createElement('canvas');
-  sky.width = 4; sky.height = 512;
+  sky.width = 8; sky.height = 2048;
   const c = sky.getContext('2d');
-  const grad = c.createLinearGradient(0, 0, 0, 512);
+  const grad = c.createLinearGradient(0, 0, 0, 2048);
   const g = Math.max(0, Math.min(1, look.ground));
   const floor = new THREE.Color(0x0a0b08).lerp(new THREE.Color(0x9aa08c), g);
   const h = Math.max(0.2, Math.min(0.9, look.horizon));
   grad.addColorStop(0, '#ffffff');
   grad.addColorStop(h * 0.55, '#e7ebe0');
-  grad.addColorStop(h - 0.02, '#7d8375');
-  grad.addColorStop(h + 0.02, '#' + floor.getHexString());
+  grad.addColorStop(h - 0.035, '#7d8375');
+  grad.addColorStop(h + 0.012, '#' + floor.getHexString());
   grad.addColorStop(1, '#050604');
   c.fillStyle = grad;
-  c.fillRect(0, 0, 4, 512);
+  c.fillRect(0, 0, 8, 2048);
   const texture = new THREE.CanvasTexture(sky);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = 8;
 
   const dome = new THREE.Mesh(
     new THREE.SphereGeometry(12, 32, 32),

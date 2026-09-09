@@ -59,7 +59,14 @@ function createScene(canvas) {
   stage.add(tilt);
   scene.add(stage);
 
-  const composer = new EffectComposer(renderer);
+  // EffectComposer crea su buffer sin multimuestreo, asi que el antialias del
+  // renderizador no llega a aplicarse: hay que pedirlo en el destino.
+  const buffer = renderer.getDrawingBufferSize(new THREE.Vector2());
+  const target = new THREE.WebGLRenderTarget(buffer.x, buffer.y, {
+    type: THREE.HalfFloatType,
+    samples: 4
+  });
+  const composer = new EffectComposer(renderer, target);
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), LOOK.bloomStrength, LOOK.bloomRadius, LOOK.bloomThreshold);
   composer.addPass(bloom);
@@ -68,13 +75,19 @@ function createScene(canvas) {
   return { renderer, camera, composer, bloom, stage, tilt, lamp, uniforms };
 }
 
+// La escala se deduce del ancho visible, no de un numero fijo: en movil el
+// lienzo es muy estrecho (relacion ~0.5) y con escala fija la pieza se sale.
+const PIECE_WIDTH = 2.05;
+
 function restPose(camera) {
   const distance = 3.6;
-  if (isMobile()) return { x: 0, y: 0, scale: 0.86, z: distance };
   const halfHeight = Math.tan((camera.fov * Math.PI / 180) / 2) * distance;
   const halfWidth = halfHeight * camera.aspect;
-  const fit = Math.max(0.6, Math.min(1, camera.aspect / 1.7));
-  return { x: halfWidth * 0.46, y: 0, scale: 0.9 * fit, z: distance };
+  const share = isMobile() ? 0.86 : 0.52;   // cuanto del ancho ocupa la pieza
+  const scale = Math.min(0.95, (halfWidth * 2 * share) / PIECE_WIDTH);
+  // En movil sube por detras del titular, para no cruzarse con el parrafo.
+  const y = isMobile() ? halfHeight * 0.62 : 0;
+  return { x: isMobile() ? 0 : halfWidth * 0.46, y, scale, z: distance };
 }
 
 // --- Arranque -----------------------------------------------------------
@@ -183,7 +196,7 @@ function start() {
     const mobile = isMobile();
 
     stage.position.set(0, 0, 0);
-    stage.scale.setScalar(mobile ? 1.0 : 1.3);
+    stage.scale.setScalar(pose.scale * 1.4);
     tilt.rotation.set(0.5, -1.5, 0.2);
     camera.position.z = mobile ? 3.4 : 2.9;
 
@@ -231,6 +244,16 @@ function start() {
     document.addEventListener('visibilitychange', () => {
       visible = !document.hidden && hero.getBoundingClientRect().bottom > 0;
       visible ? play() : pause();
+      // GSAP avanza con requestAnimationFrame, que el navegador congela en
+      // segundo plano: si la pestana se oculta durante la entrada, el titular
+      // se quedaria esperando. Nadie esta mirando la animacion, asi que se
+      // suelta el contenido y se planta la pieza en su sitio.
+      if (document.hidden && introRunning) {
+        gsap?.globalTimeline.getChildren().forEach(t => t.progress(1));
+        introRunning = false;
+        applyRest();
+        releaseContent();
+      }
     });
     addEventListener('resize', resize);
     addEventListener('scroll', () => {
