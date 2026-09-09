@@ -7,6 +7,8 @@ html:not(.spark-active).ao3d-on .hero{cursor:grab}
 html:not(.spark-active).ao3d-dragging .hero{cursor:grabbing}
 html:not(.spark-active).ao3d-on .hero a,
 html:not(.spark-active).ao3d-on .hero summary{cursor:pointer}
+/* Todo el hero es agarradera, asi que arrastrar no debe pintar una seleccion. */
+html.ao3d-on .hero{-webkit-user-select:none;user-select:none}
 html.ao3d-on .hero .ao-visual,
 html.ao3d-pending .hero .ao-visual{display:none}
 

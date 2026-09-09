@@ -1,4 +1,29 @@
 (() => {
+  // Añade una envoltura animable solo a los desplegables de Otros hackathons.
+  // Cada tarjeta conserva su propia altura: abrir una no modifica las demás.
+  document.querySelectorAll('.other-hackathons details').forEach(details => {
+    const inner = document.createElement('div');
+    inner.className = 'details-inner';
+    const content = document.createElement('div');
+    content.className = 'details-content';
+    while (details.children.length > 1) inner.append(details.children[1]);
+    content.append(inner);
+    details.append(content);
+
+    details.querySelector('summary').addEventListener('click', event => {
+      event.preventDefault();
+      if (!details.open) {
+        details.open = true;
+        requestAnimationFrame(() => details.classList.add('is-expanded'));
+        return;
+      }
+      details.classList.remove('is-expanded');
+      setTimeout(() => {
+        if (!details.classList.contains('is-expanded')) details.open = false;
+      }, 390);
+    });
+  });
+
   const track=document.querySelector('.skills-track');
   const group=track.firstElementChild;
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');

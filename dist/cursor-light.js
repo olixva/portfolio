@@ -48,13 +48,13 @@
     ly += (y - ly) * ease;
     glow += ((hover ? 1 : 0) - glow) * (1 - Math.pow(.004, dt));
 
-    // El halo cubre mucha superficie y se guía por la sección; el punto y el
+    // El halo queda cerca del puntero y se guía por la sección; el punto y el
     // disco se guían por lo que pisan, para no perderse sobre el botón ácido.
     const tint = onAcid ? DARK : ACID;
     const inkTint = onLight ? DARK : ACID;
-    const radius = 124 + glow * 46;
+    const radius = 58 + glow * 18;
     const halo = ctx.createRadialGradient(lx, ly, 0, lx, ly, radius);
-    halo.addColorStop(0, 'rgba(' + tint + ',' + (.11 + glow * .07).toFixed(3) + ')');
+    halo.addColorStop(0, 'rgba(' + tint + ',' + (.065 + glow * .035).toFixed(3) + ')');
     halo.addColorStop(1, 'rgba(' + tint + ',0)');
     ctx.fillStyle = halo;
     ctx.beginPath();
@@ -66,14 +66,14 @@
       ctx.globalAlpha = glow * .2;
       ctx.fillStyle = 'rgb(' + inkTint + ')';
       ctx.beginPath();
-      ctx.arc(x, y, 10 + glow * 12, 0, Math.PI * 2);
+      ctx.arc(x, y, 8 + glow * 8, 0, Math.PI * 2);
       ctx.fill();
     }
 
     ctx.globalAlpha = 1;
     ctx.fillStyle = 'rgb(' + inkTint + ')';
     ctx.beginPath();
-    ctx.arc(x, y, 4 + glow * 2, 0, Math.PI * 2);
+    ctx.arc(x, y, 3 + glow, 0, Math.PI * 2);
     ctx.fill();
 
     frame = requestAnimationFrame(draw);
@@ -84,7 +84,7 @@
     x = event.clientX; y = event.clientY;
     const target = event.target instanceof Element ? event.target : null;
     hover = !!target?.closest('a,button,summary,[role="button"]');
-    onAcid = !!target?.closest('.contact');
+    onAcid = !!target?.closest('.contact,.case-ticket');
     onLight = onAcid || !!target?.closest('.pill,.case-badge,.skip');
     pointer.x = x; pointer.y = y; pointer.hover = hover;
     if (!active) {

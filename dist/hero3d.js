@@ -8,7 +8,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js';
+import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=fresnel-finite-1';
 
 const MODEL = 'assets/ao-sculpture.glb';
 
@@ -28,6 +28,8 @@ function createScene(canvas) {
   const renderer = new THREE.WebGLRenderer({
     canvas, antialias: true, alpha: true, powerPreference: 'high-performance'
   });
+  // Fondo transparente para integrar la escena en el hero.
+  renderer.setClearColor(0x000000, 0);
   renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile() ? 1.5 : 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = LOOK.exposure;
@@ -59,14 +61,8 @@ function createScene(canvas) {
   stage.add(tilt);
   scene.add(stage);
 
-  // EffectComposer crea su buffer sin multimuestreo, asi que el antialias del
-  // renderizador no llega a aplicarse: hay que pedirlo en el destino.
-  const buffer = renderer.getDrawingBufferSize(new THREE.Vector2());
-  const target = new THREE.WebGLRenderTarget(buffer.x, buffer.y, {
-    type: THREE.HalfFloatType,
-    samples: 4
-  });
-  const composer = new EffectComposer(renderer, target);
+  // Buffers HDR estándar para el postprocesado.
+  const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), LOOK.bloomStrength, LOOK.bloomRadius, LOOK.bloomThreshold);
   composer.addPass(bloom);
@@ -83,11 +79,11 @@ function restPose(camera) {
   const distance = 3.6;
   const halfHeight = Math.tan((camera.fov * Math.PI / 180) / 2) * distance;
   const halfWidth = halfHeight * camera.aspect;
-  const share = isMobile() ? 0.78 : 0.52;   // cuanto del ancho ocupa la pieza
+  const share = isMobile() ? 0.78 : 0.48;   // deja margen para los giros laterales
   const scale = Math.min(0.95, (halfWidth * 2 * share) / PIECE_WIDTH);
   // En movil el lienzo es ya una banda propia arriba: la pieza va centrada en
   // ella. En escritorio se recuesta a la derecha del titular.
-  return { x: isMobile() ? 0 : halfWidth * 0.46, y: 0, scale, z: distance };
+  return { x: isMobile() ? 0 : halfWidth * 0.36, y: 0, scale, z: distance };
 }
 
 // --- Arranque -----------------------------------------------------------
@@ -168,7 +164,7 @@ function start() {
     raycaster.setFromCamera(ndc, camera);
     if (!raycaster.ray.intersectPlane(plane, hit)) return;
 
-    lamp.position.set(hit.x, hit.y, 1.4);
+    lamp.position.set(hit.x, hit.y, 1.25);
     // La lampara sigue al puntero por todo el hero: la caida la da su propio
     // alcance, no un recorte por distancia, para que el reflejo tenga recorrido.
     lamp.intensity += (LOOK.lamp - lamp.intensity) * 0.12;
@@ -290,6 +286,7 @@ function start() {
       // Lo pulsable manda: no se secuestra el clic de un enlace ni una seleccion.
       const target = event.target instanceof Element ? event.target : null;
       if (target?.closest('a,button,summary,input,textarea,[role="button"]')) return;
+      event.preventDefault();   // si no, arrastrar sobre el titular lo selecciona
       drag.on = true; drag.id = event.pointerId;
       drag.x = event.clientX; drag.y = event.clientY;
       hero.setPointerCapture(event.pointerId);

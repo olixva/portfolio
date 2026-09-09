@@ -1,56 +1,59 @@
 # Portfolio — Antonio Oliva Cárceles
 
-Web personal estática construida con HTML, CSS y JavaScript, sin proceso de compilación.
-Las dependencias van autoalojadas en `dist/vendor/` y `dist/fonts/`: la web
-funciona sin conexión y sin CDN.
+Web estática con HTML, CSS, JavaScript, Three.js y GSAP. Sin instalación de paquetes ni compilación. Dependencias y fuentes autoalojadas.
 
-## Abrir el proyecto
+## Desarrollo
 
-Abre `dist/index.html` en un navegador o sírvelo desde la carpeta raíz:
-
-```bash
+```sh
 python3 -m http.server 8000 -d dist
 ```
 
-Después, visita `http://localhost:8000`.
+Abre http://localhost:8000. Usa HTTP: abrir con `file://` puede bloquear módulos y modelos según el navegador.
 
 ## Estructura
 
-- `dist/index.html`: contenido y estructura de la página.
-- `dist/style.css`: estilos base.
-- `dist/refinements.css`, `compact.css`, `details.css`, `orbit.css` y `personal.css`: ajustes por secciones y responsive.
-- `dist/script.js`: progreso de lectura, animaciones de entrada y comportamiento del hero.
-- `dist/details.js`: carrusel de tecnologías y menú móvil.
-- `dist/spark-cursor.js`: efecto de destellos del cursor en escritorio.
-- `dist/assets/`: imágenes de la web, retrato e imagen de compartición (`og.jpg`).
-- `dist/fonts/`: DM Sans autoalojada (SIL OFL 1.1).
-- `dist/vendor/`: three.js y GSAP, a la espera del hero 3D.
-- `dist/hero3d.js` y `hero3d.css`: hero WebGL, **aún sin enlazar** desde
-  `index.html`. Se activará cuando esté el asset 3D definitivo.
-- `sources/`: material que no se publica — masters de las imágenes, la
-  plantilla `og-card.html` y CSS/JS de versiones anteriores.
+- `dist/`: sitio listo para publicar; contiene también el código fuente.
+- `dist/index.html`: contenido, metadatos y arranque temprano de la intro.
+- `dist/style.css`: estilos base. `refinements.css`, `compact.css`, `details.css`, `orbit.css` y `personal.css` añaden ajustes de composición y secciones. Su orden de carga es intencional.
+- `dist/hero3d.js` y `hero3d.css`: carga, render, interacción y presentación del hero.
+- `dist/sculpture.js`: material y entorno compartidos con el panel de ajuste.
+- `dist/script.js`: scroll y animaciones de entrada.
+- `dist/details.js`: acordeones, carrusel y menú móvil.
+- `dist/cursor-light.js`: cursor y halo.
+- `dist/assets/`, `fonts/`, `vendor/`: recursos optimizados, dependencias y licencias.
+- `tools/`: herramientas de desarrollo; no se publican.
+- `sources/`: masters, plantilla de imagen social y versiones históricas. El GLB original ocupa unos 58 MB; no hace falta para servir la web.
+- `scripts/`: comprobaciones del repositorio.
 
-## Preferencias de diseño actuales
+## Herramientas
 
-- Fondo oscuro carbón, texto marfil y acentos verde lima.
-- Navegación y footer con el logotipo `ao/`.
-- Animaciones respetan `prefers-reduced-motion`.
-- La web es responsive y no requiere backend.
+Sirve la raíz para acceder a ellas:
 
-## Regenerar la imagen de compartición
-
-`sources/og-card.html` es la plantilla. Cópiala a `dist/`, sírvela y captúrala:
-
-```bash
-cp sources/og-card.html dist/ && python3 -m http.server 8000 -d dist &
-"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless \
-  --force-device-scale-factor=2 --window-size=1200,630 \
-  --screenshot=/tmp/og.png http://localhost:8000/og-card.html
-sips -Z 1200 -s format jpeg -s formatOptions 82 /tmp/og.png --out dist/assets/og.jpg
-rm dist/og-card.html
+```sh
+python3 -m http.server 8001
 ```
 
-## Pendiente
+- http://localhost:8001/dist/ — portfolio.
+- http://localhost:8001/tools/tune.html — ajuste de material y luces.
+- http://localhost:8001/tools/render-probe.html — diagnóstico numérico de GPU; `invalidAfter` debe ser cero. El resultado original depende de la GPU.
 
-- `og:url` y `og:image` deberían pasar a URL absolutas cuando la web tenga
-  dominio propio; ahora son relativas.
+El shader limita la base del Fresnel antes de `pow` para evitar valores NaN que el bloom puede propagar como manchas negras. Conserva ese límite. Al cambiar los módulos del hero, actualiza las versiones de caché en `index.html` y `hero3d.js`.
+
+## Verificación
+
+Requiere Python 3 y Node.js:
+
+```sh
+python3 scripts/check.py
+git diff --check
+```
+
+Revisión visual: giro del hero en Chrome y Safari, cursor, recarga desde una sección con ancla, acordeones y layout móvil. Los checks estáticos no detectan fallos de GPU.
+
+## Publicación
+
+Publica únicamente `dist/`. No hay comando de build. Para GitHub Pages usa un workflow que publique esa carpeta como artefacto; el modo por rama no permite seleccionar `dist/` directamente. Las rutas relativas admiten subdirectorios.
+
+Con el dominio definitivo, configura `og:url`, `og:image` y `twitter:image` con URL absolutas en `index.html`. La imagen social es `dist/assets/og.jpg` y su plantilla está en `sources/og-card.html`.
+
+Conserva las licencias de terceros en `dist/vendor/` y `dist/fonts/`.

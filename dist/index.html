@@ -26,7 +26,7 @@
 <link rel="stylesheet" href="compact.css">
 <link rel="stylesheet" href="details.css">
 <link rel="stylesheet" href="orbit.css">
-<link rel="stylesheet" href="personal.css">
+<link rel="stylesheet" href="personal.css?v=accordion-4">
 <link rel="stylesheet" href="hero3d.css">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <script type="importmap">
@@ -37,26 +37,20 @@
    - ao3d-pending oculta el hero CSS de apoyo desde el primer fotograma, para
      que no se vea mientras se descarga el modelo. Si el 3D falla, hero3d.js
      quita la clase y el apoyo reaparece.
-   - ao3d-intro reserva el titular para la entrada. Con ?intro en la URL la
-     entrada se repite siempre, que si no solo se ve una vez por sesion.
+   - ao3d-intro reserva el titular para la entrada en cada recarga.
    Los dos temporizadores son la red de seguridad por si el modulo no arranca. */
 (function(){
   var root = document.documentElement, webgl = false;
 
-  /* Al recargar, el navegador restaura el scroll anterior; como el hero cambia
-     de altura mientras carga, ese desplazamiento cae mas abajo y la pagina
-     aparece en Hackathons. Con hash en la URL no se toca nada. */
+  /* Cada recarga empieza en el hero, sin conservar anclas ni desplazamiento. */
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
-  if (!location.hash) {
-    var toTop = function () { scrollTo(0, 0); };
-    addEventListener('load', function () {
-      // Chrome puede restaurar el scroll despues de 'load', cuando la
-      // maquetacion termina de asentarse: hay que insistir un par de veces.
-      toTop();
-      requestAnimationFrame(toTop);
-      setTimeout(toTop, 120);
-    });
-  }
+  if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+  var toTop = function () { scrollTo(0, 0); };
+  addEventListener('load', function () {
+    toTop();
+    requestAnimationFrame(toTop);
+    setTimeout(toTop, 120);
+  });
 
   try { webgl = !!document.createElement('canvas').getContext('webgl2'); } catch (e) {}
   if (!webgl) return;
@@ -65,12 +59,8 @@
   root.classList.add('ao3d-pending');
   setTimeout(function () { root.classList.remove('ao3d-pending'); }, 10000);
 
-  var forced = /[?&#]intro\b/.test(location.search + location.hash);
-  var seen = false;
-  try { seen = sessionStorage.getItem('ao3d-intro') === '1'; } catch (e) {}
-  if (!reduce && (forced || !seen)) {
+  if (!reduce) {
     root.classList.add('ao3d-intro');
-    try { sessionStorage.setItem('ao3d-intro', '1'); } catch (e) {}
     setTimeout(function () { root.classList.remove('ao3d-intro'); }, 12000);
   }
 })();
@@ -93,7 +83,7 @@
 <div class="hero-content">
 <p class="eyebrow hero-eyebrow"><span>Senior AI Engineer</span><span>Allianz · Madrid</span></p>
 <h1><span class="line"><span>Ingeniería.</span></span><span class="line"><span>Inteligencia.</span></span><span class="line accent"><span>Impacto.</span></span></h1>
-<div class="hero-description"><p>Soy Antonio. Transformo ideas en sistemas de IA que funcionan en el mundo real.</p><a class="pill magnetic" href="#hackathons">Descubre mi trabajo</a></div>
+<div class="hero-description"><p>Soy Antonio. Transformo ideas en sistemas de IA que funcionan en el mundo real.</p><a class="pill" href="#hackathons">Descubre mi trabajo</a></div>
 </div>
 
 </section>
@@ -113,7 +103,7 @@
 </div>
 <div class="other-hackathons"><div class="section-intro"><p class="eyebrow">Otros hackathons</p><span class="section-note">Finalistas y participaciones</span></div><div class="other-grid">
 <article class="other-card"><p class="participation-status">Finalista · 2025</p><h3>NASA Space Apps</h3><p>Una forma de explorar publicaciones de biología espacial con inteligencia artificial.</p><details><summary>Ver el enfoque<span class="plus" aria-hidden="true"></span></summary><p>Extracción de papers con un proceso ETL, creación de un grafo de conocimiento con LLMs y búsqueda semántica con embeddings y RAG. Backend en Python, FastAPI y MongoDB, con frontend en React.</p></details></article>
-<article class="other-card"><p class="participation-status">Participación · Sin premio</p><h3>MERGE / Web3</h3><p>Micropagos energéticos automáticos a partir del consumo de los contadores.</p><details><summary>Ver el enfoque<span class="plus" aria-hidden="true"></span></summary><p>Los contadores enviaban su consumo cada hora y el sistema ejecutaba el pago mediante blockchain. Una interfaz permitía consultar los consumos. Desarrollamos la propuesta en equipo durante el hackathon de MERGE.</p></details><a class="publication-link" href="https://www.linkedin.com/posts/antonio-oliva-carceles_es-web3-el-futuro-para-las-microtransacciones-activity-7401867970790014976-pqD8" target="_blank" rel="noopener noreferrer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-linkedin"></use></svg>Ver publicación en LinkedIn</a></article>
+<article class="other-card"><p class="participation-status">Participación</p><h3>MERGE / Web3</h3><p>Micropagos energéticos automáticos a partir del consumo de los contadores.</p><details><summary>Ver el enfoque<span class="plus" aria-hidden="true"></span></summary><p>Los contadores enviaban su consumo cada hora y el sistema ejecutaba el pago mediante blockchain. Una interfaz permitía consultar los consumos. Desarrollamos la propuesta en equipo durante el hackathon de MERGE.</p></details><a class="publication-link" href="https://www.linkedin.com/posts/antonio-oliva-carceles_es-web3-el-futuro-para-las-microtransacciones-activity-7401867970790014976-pqD8" target="_blank" rel="noopener noreferrer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-linkedin"></use></svg>Ver publicación en LinkedIn</a></article>
 <article class="other-card"><p class="participation-status">Participación</p><h3>Codemotion & AXA</h3><p>Visión artificial para evaluar daños de un vehículo antes de contratar un seguro a todo riesgo.</p><details><summary>Ver el enfoque<span class="plus" aria-hidden="true"></span></summary><p>Desarrollamos un software que analizaba imágenes del vehículo con visión artificial e inteligencia artificial para evaluar sus daños. Lo integramos en el proceso de contratación de un seguro a todo riesgo, para verificar el estado inicial del vehículo antes de asegurarlo.</p><p>El backend estaba construido con Python y FastAPI, e integraba LLMs en el flujo de evaluación.</p></details><a class="publication-link" href="https://www.linkedin.com/posts/antonio-oliva-carceles_hackathon-teamworkmakesthedreamwork-hackathonexperience-activity-7313260747415859202-0cux" target="_blank" rel="noopener noreferrer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-linkedin"></use></svg>Ver publicación en LinkedIn</a></article>
 </div></div></section>
 <section class="about section" id="sobre-mi">
@@ -132,5 +122,5 @@
 <div class="contact-social"><p class="contact-label">En la red</p><div class="social-links"><a class="social-link social-linkedin" href="https://www.linkedin.com/in/antonio-oliva-carceles" target="_blank" rel="noopener noreferrer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-linkedin"></use></svg><span>LinkedIn<small>Lo que comparto</small></span></a><a class="social-link social-github" href="https://github.com/olixva" target="_blank" rel="noopener noreferrer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-github"></use></svg><span>GitHub<small>Lo que construyo</small></span></a></div></div></div></section>
 </main><footer><a class="brand" href="#inicio" aria-label="Volver al inicio">ao<span>/</span></a><span>© <span id="year">2026</span> Antonio Oliva Cárceles</span><a href="#inicio">Volver arriba</a></footer>
 <script src="vendor/gsap.min.js" defer></script>
-<script type="module" src="hero3d.js"></script>
-<script src="script.js" defer></script><script src="details.js" defer></script><script src="cursor-light.js" defer></script></body></html>
+<script type="module" src="hero3d.js?v=fresnel-finite-1"></script>
+<script src="script.js?v=scroll-2" defer></script><script src="details.js?v=smooth-5" defer></script><script src="cursor-light.js?v=compact-4" defer></script></body></html>

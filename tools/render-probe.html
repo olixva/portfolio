@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><title>Diagnóstico numérico del shader</title>
+<base href="../dist/">
+<style>body{background:#171814;color:#eee;font:18px monospace;padding:32px}canvas{width:256px}</style>
+<h1>Diagnóstico numérico del shader</h1><pre id="result">Ejecutando…</pre>
+<p>Prueba de redondeo de GPU: compara la potencia original con la base limitada al intervalo [0, 1]. El resultado esperado de invalidAfter es 0.</p>
+<p><a href="./index.html" style="color:#d5ff70">Volver al portfolio</a></p>
+<script type="importmap">{"imports":{"three":"./vendor/three/three.module.min.js"}}</script>
+<script type="module">
+import * as THREE from 'three';
+const renderer=new THREE.WebGLRenderer();
+renderer.setSize(512,512); document.body.append(renderer.domElement);
+const target=new THREE.WebGLRenderTarget(512,512);
+const scene=new THREE.Scene(), camera=new THREE.Camera();
+const material=new THREE.ShaderMaterial({
+vertexShader:'void main(){gl_Position=vec4(position,1.0);}',
+fragmentShader:`void main(){
+  vec3 v=vec3(gl_FragCoord.xy/512.0,0.37);
+  float cosine=abs(dot(normalize(v),normalize(v)));
+  float base=1.0-cosine;
+  float original=pow(base,3.2);
+  float corrected=pow(clamp(base,0.0,1.0),3.2);
+  gl_FragColor=vec4(base<0.0?1.0:0.0,isnan(original)?1.0:0.0,isnan(corrected)?1.0:0.0,1.0);
+}`});
+scene.add(new THREE.Mesh(new THREE.PlaneGeometry(2,2),material));
+renderer.setRenderTarget(target);renderer.render(scene,camera);
+const pixels=new Uint8Array(512*512*4);renderer.readRenderTargetPixels(target,0,0,512,512,pixels);
+let negative=0,invalidBefore=0,invalidAfter=0;
+for(let i=0;i<pixels.length;i+=4){negative+=pixels[i]>0;invalidBefore+=pixels[i+1]>0;invalidAfter+=pixels[i+2]>0;}
+renderer.setRenderTarget(null);renderer.render(scene,camera);
+document.querySelector('#result').textContent=JSON.stringify({samples:512*512,negative,invalidBefore,invalidAfter},null,2);
+</script>

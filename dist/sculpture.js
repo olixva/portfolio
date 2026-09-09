@@ -11,26 +11,26 @@ export const LOOK = {
   useBaseMap: false,     // el mapa de color trae horneado el dorado del render
   roughness: 0.5,       // multiplica el mapa de rugosidad del modelo
   metalness: 1,
-  envIntensity: 0.6,
+  envIntensity: 0.7,
   rim: 0.16,             // filo ácido por fresnel
   // Escena
-  exposure: 1.05,
-  keyLight: 0.4,
+  exposure: 1.08,
+  keyLight: 0.45,
   rimLight: 0.3,
   ambient: 0.07,
   // Reacción al puntero. A cero, el ratón no hace nada cerca de la pieza.
-  lamp: 3,             // lámpara del cursor: es la luz principal de la escena
+  lamp: 1.55,          // lámpara del cursor: reflejo localizado, sin bañar la escena
   deform: 0,             // deformación de la superficie al acercarte
   follow: 1,             // 1 = la pieza gira siguiendo al puntero
   // Entorno
-  envSun: 2.4,             // tira principal
+  envSun: 2.9,             // tira principal
   envAcid: 1,          // tira ácida: acento en un canto, no tinte general
-  envFill: 1,          // relleno frontal
+  envFill: 1.2,          // relleno frontal
   horizon: 0.6,          // altura del corte cielo/suelo
-  ground: 0.14,          // claridad del suelo (0 = negro)
+  ground: 0.3,           // suelo oscuro, pero sin reflejos que caigan a negro
   // Bloom
-  bloomStrength: 0.12,
-  bloomRadius: 0.45,
+  bloomStrength: 0.07,
+  bloomRadius: 0.34,
   bloomThreshold: 1.05
 };
 
@@ -45,13 +45,13 @@ export function buildEnvironment(renderer, look = LOOK) {
   const c = sky.getContext('2d');
   const grad = c.createLinearGradient(0, 0, 0, 2048);
   const g = Math.max(0, Math.min(1, look.ground));
-  const floor = new THREE.Color(0x0a0b08).lerp(new THREE.Color(0x9aa08c), g);
+  const floor = new THREE.Color(0x1b1e17).lerp(new THREE.Color(0x9aa08c), g);
   const h = Math.max(0.2, Math.min(0.9, look.horizon));
   grad.addColorStop(0, '#ffffff');
   grad.addColorStop(h * 0.55, '#e7ebe0');
   grad.addColorStop(h - 0.035, '#7d8375');
   grad.addColorStop(h + 0.012, '#' + floor.getHexString());
-  grad.addColorStop(1, '#050604');
+  grad.addColorStop(1, '#171914');
   c.fillStyle = grad;
   c.fillRect(0, 0, 8, 2048);
   const texture = new THREE.CanvasTexture(sky);
@@ -118,10 +118,14 @@ export function applySteel(material, uniforms, look = LOOK) {
       + shader.fragmentShader
         .replace('#include <dithering_fragment>', `
           #include <dithering_fragment>
-          float fresnel = pow(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 3.2);
+          // La normalización en GPU puede producir dot > 1 por redondeo.
+          // pow(base negativa, 3.2) genera NaN y el bloom lo propaga.
+          float rimBase = clamp(1.0 - abs(dot(normalize(vNormal), normalize(vViewPosition))), 0.0, 1.0);
+          float fresnel = pow(rimBase, 3.2);
           gl_FragColor.rgb += uRimColor * fresnel * uRim;
         `);
   };
+
   material.needsUpdate = true;
 }
 
