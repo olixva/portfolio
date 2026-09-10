@@ -6,6 +6,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=9ecd0025';
 
@@ -71,23 +72,53 @@ function createScene(canvas) {
   // tenue sobre todo el lienzo y oscurecía un nivel RGB el fondo al aparecer.
   composer.addPass(new OutputPass());
 
-  return { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms };
+  // Mezcla imágenes completas después de OutputPass, en el mismo espacio sRGB
+  // que el vídeo del navegador. Proyectarlo sobre la malla recortaba sus
+  // reflejos y volvía transparentes las zonas oscuras del metal.
+  const handoff = new ShaderPass({
+    uniforms: {
+      tDiffuse: { value: null }, frame: { value: null }, mixAmount: { value: 1 },
+      fit: { value: new THREE.Vector2(1, 1) }, offset: { value: new THREE.Vector2() },
+      background: { value: new THREE.Vector3(17 / 255, 18 / 255, 16 / 255) }
+    },
+    vertexShader: `varying vec2 vUv;
+      void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform sampler2D tDiffuse, frame;
+      uniform float mixAmount;
+      uniform vec2 fit, offset;
+      uniform vec3 background;
+      varying vec2 vUv;
+      void main() {
+        vec4 rendered = texture2D(tDiffuse, vUv);
+        vec3 metal = rendered.rgb + background * (1.0 - rendered.a);
+        vec2 uv = (vUv - 0.5) * fit + 0.5 + offset;
+        vec3 video = background;
+        if (all(greaterThanEqual(uv, vec2(0.0))) && all(lessThanEqual(uv, vec2(1.0))))
+          video = max(background, texture2D(frame, uv).rgb);
+        gl_FragColor = vec4(mix(metal, video, mixAmount), 1.0);
+      }`
+  });
+  handoff.enabled = false;
+  composer.addPass(handoff);
+  return { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms, handoff };
 }
 
 // La escala se deduce del ancho visible, no de un numero fijo: en movil el
 // lienzo es muy estrecho (relacion ~0.5) y con escala fija la pieza se sale.
 const PIECE_WIDTH = 2.05;
 
-function restPose(camera) {
+function restPose(camera, height) {
   const distance = 3.6;
   const halfHeight = Math.tan((camera.fov * Math.PI / 180) / 2) * distance;
   const halfWidth = halfHeight * camera.aspect;
-  const share = isMobile() ? 0.78 : 0.40;   // deja margen para los giros laterales
+  const share = isMobile() ? 0.595 : 0.40;   // deja margen para los giros laterales
   const width = isMobile() ? innerWidth * share : Math.min(innerWidth * share, 720);
-  const scale = Math.min(0.95, (halfWidth * 2 * width / innerWidth) / PIECE_WIDTH);
-  // En movil el lienzo es ya una banda propia arriba: la pieza va centrada en
-  // ella. En escritorio se recuesta a la derecha del titular.
-  return { x: isMobile() ? 0 : halfWidth * (Math.min(innerWidth * 0.88, 1400) / innerWidth) * 0.48, y: 0, scale, z: distance };
+  const scale = Math.min(0.95, (halfWidth * 2 * width / innerWidth) / PIECE_WIDTH) * (isMobile() ? 1 : 1.2);
+  // En móvil el lienzo cubre todo el recorrido, pero la pose final queda
+  // centrada en la banda reservada encima del titular.
+  const band = parseFloat(getComputedStyle(hero).paddingTop) - 12;
+  const y = isMobile() ? halfHeight * (1 - band / height) : 0;
+  return { x: isMobile() ? 0 : halfWidth * (Math.min(innerWidth * 0.88, 1400) / innerWidth) * 0.48, y, scale, z: distance };
 }
 
 // --- Arranque -----------------------------------------------------------
@@ -113,12 +144,8 @@ function start() {
   }
 
   let introFrame = null;
-  const { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms } = ctx;
-  uniforms.uIntroProjection = { value: 0 };
-  uniforms.uIntroFrame = { value: null };
-  uniforms.uIntroResolution = { value: new THREE.Vector2(1, 1) };
-  uniforms.uIntroFit = { value: new THREE.Vector2(1, 1) };
-  uniforms.uIntroOffset = { value: new THREE.Vector2() };
+  const { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms, handoff } = ctx;
+  let framePose = null;
   let readyForHandoff = false;
   intro?.ended.then(() => { if (!readyForHandoff && introRunning) intro.waiting(); });
   let model = null;
@@ -138,7 +165,7 @@ function start() {
   const ndc = new THREE.Vector2();
 
   function applyRest() {
-    const pose = restPose(camera);
+    const pose = restPose(camera, rect.height);
     stage.position.set(pose.x, pose.y, 0);
     stage.scale.setScalar(pose.scale);
     camera.position.z = pose.z;
@@ -163,7 +190,6 @@ function start() {
     renderer.setPixelRatio(dpr);
     renderer.setSize(width, height, false);
     composer.setSize(width, height);
-    renderer.getDrawingBufferSize(uniforms.uIntroResolution.value);
     if (!introRunning) applyRest();
     else if (intro && !transitioning) matchVideoPose();
   }
@@ -247,52 +273,34 @@ function start() {
     const videoScale = Math.min(videoRect.width / 1248, videoRect.height / 704);
     const centerX = videoRect.left + videoRect.width / 2 - rect.left - rect.width / 2;
     const centerY = videoRect.top + videoRect.height / 2 - rect.top - rect.height / 2;
-    // Vídeo y modelo se alinean en píxeles dentro del mismo lienzo del hero.
-    uniforms.uIntroFit.value.set(rect.width / (1248 * videoScale), rect.height / (704 * videoScale));
-    uniforms.uIntroOffset.value.set(-centerX / (1248 * videoScale), centerY / (704 * videoScale));
     stage.scale.setScalar(2 * halfHeight * (1188 * videoScale / rect.height) / PIECE_WIDTH);
     stage.position.set((centerX - 6 * videoScale) / rect.height * 2 * halfHeight,
       (-centerY + 12 * videoScale) / rect.height * 2 * halfHeight, 0);
     tilt.rotation.set(0, 0, 0.035);
     camera.position.z = 3.6;
-    // Ancla el fotograma al modelo, no a la pantalla mientras se desplaza.
-    camera.updateMatrixWorld();
-    scene.updateMatrixWorld(true);
-    model?.traverse(node => {
-      if (node.isMesh && node.material.userData.introMatrix) {
-        node.material.userData.introMatrix.copy(camera.projectionMatrix)
-          .multiply(camera.matrixWorldInverse).multiply(node.matrixWorld);
-      }
-    });
+    framePose = {
+      scale: stage.scale.x, x: stage.position.x, y: stage.position.y,
+      width: 1248 * videoScale, height: 704 * videoScale, centerX, centerY
+    };
+    updateIntroFrame();
   }
 
-  // Variante de matchVideoPose que solo refresca la proyeccion del fotograma
-  // del video sobre la superficie del modelo. No toca stage.position/scale ni
-  // tilt.rotation porque la fase unificada del relevo anima esas magnitudes
-  // por GSAP; este helper se llama desde el onUpdate de ese tween para que
-  // la textura del video quede pegada al modelo mientras ambos se mueven.
-  function matchVideoProjection() {
-    const videoRect = intro.video.getBoundingClientRect();
-    const videoScale = Math.min(videoRect.width / 1248, videoRect.height / 704);
-    const centerX = videoRect.left + videoRect.width / 2 - rect.left - rect.width / 2;
-    const centerY = videoRect.top + videoRect.height / 2 - rect.top - rect.height / 2;
-    uniforms.uIntroFit.value.set(rect.width / (1248 * videoScale), rect.height / (704 * videoScale));
-    uniforms.uIntroOffset.value.set(-centerX / (1248 * videoScale), centerY / (704 * videoScale));
-    camera.updateMatrixWorld();
-    scene.updateMatrixWorld(true);
-    model?.traverse(node => {
-      if (node.isMesh && node.material.userData.introMatrix) {
-        node.material.userData.introMatrix.copy(camera.projectionMatrix)
-          .multiply(camera.matrixWorldInverse).multiply(node.matrixWorld);
-      }
-    });
+  function updateIntroFrame() {
+    if (!framePose) return;
+    const ratio = stage.scale.x / framePose.scale;
+    const pixelsPerUnit = rect.height / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) * 3.6);
+    const centerX = framePose.centerX * ratio + (stage.position.x - framePose.x * ratio) * pixelsPerUnit;
+    const centerY = framePose.centerY * ratio - (stage.position.y - framePose.y * ratio) * pixelsPerUnit;
+    const width = framePose.width * ratio, height = framePose.height * ratio;
+    handoff.uniforms.fit.value.set(rect.width / width, rect.height / height);
+    handoff.uniforms.offset.value.set(-centerX / width, centerY / height);
   }
 
   function finishIntro() {
     clearTimeout(modelTimeout);
     introTimeline?.kill();
-    uniforms.uIntroProjection.value = 0;
-    uniforms.uIntroFrame.value = null;
+    handoff.enabled = false;
+    handoff.uniforms.frame.value = null;
     introFrame?.dispose();
     introFrame = null;
     canvas.style.opacity = model ? '1' : '0';
@@ -323,9 +331,7 @@ function start() {
   async function runIntro() {
     if (!intro) { applyRest(); releaseContent(); return; }
     // Se compilan materiales y postprocesado detrás del vídeo antes del relevo.
-    introFrame = new THREE.VideoTexture(intro.video);
-    uniforms.uIntroFrame.value = introFrame;
-    uniforms.uIntroProjection.value = 1;
+    handoff.uniforms.mixAmount.value = 1;
     uniforms.uBaseMix.value = 0.25;
     uniforms.uRim.value = 0;
     rim.intensity = 0;
@@ -334,84 +340,54 @@ function start() {
     await renderer.compileAsync(scene, camera);
     clearTimeout(modelTimeout);
     if (!introRunning) return;
+    // Prepara también el último pase durante el vídeo: compilarlo en ended
+    // consumía parte del primer fotograma del relevo.
+    handoff.enabled = true;
     composer.render();
+    handoff.enabled = false;
     readyForHandoff = true;
     await intro.ended;
     await document.fonts.ready;
     if (!introRunning) return;
     clearTimeout(modelTimeout);
     intro.hideLoader();
-    canvas.style.opacity = '1';
+    // Congela el fotograma realmente presentado: VideoTexture puede conservar
+    // el anterior si el último callback de decodificación llega tras ended.
+    if (!intro.video.videoWidth || intro.video.readyState < 2) { finishIntro(); return; }
+    const lastFrame = document.createElement('canvas');
+    lastFrame.width = intro.video.videoWidth;
+    lastFrame.height = intro.video.videoHeight;
+    lastFrame.getContext('2d').drawImage(intro.video, 0, 0);
+    introFrame = new THREE.CanvasTexture(lastFrame);
+    introFrame.generateMipmaps = false;
+    introFrame.minFilter = THREE.LinearFilter;
+    handoff.uniforms.frame.value = introFrame;
+    matchVideoPose();
+    handoff.enabled = true;
     composer.render();
+    canvas.style.opacity = '1';
+    intro.video.style.opacity = '1';
     transitioning = true;
     root.classList.add('ao3d-revealing');
-    const pose = restPose(camera);
-    // Relevo en movil: una sola fase donde el video sube, se encoge hasta
-    // coincidir con el frame del modelo en la banda, y se desvanece a la vez
-    // que el modelo escala hasta su pose de reposo. La proyeccion del fotograma
-    // del video sobre el modelo se refresca cada frame (matchVideoProjection
-    // en onUpdate) para que la textura quede pegada al modelo mientras ambos
-    // se mueven. releaseContent al principio dispara la transicion CSS de las
-    // letras, que terminan de aparecer antes de que acabe la fase. En
-    // escritorio travel=0 y t0=0: la rama de abajo reproduce el timeline
-    // original sin cambios.
-    const travel = isMobile() ? Math.max(0, parseFloat(getComputedStyle(intro.video).top) - rect.height / 2) : 0;
-    const t0 = travel > 1 ? 1.0 : 0;
-    const currentTop = parseFloat(getComputedStyle(intro.video).top);
-    const targetTop = rect.height / 2;
-    introTimeline = gsap.timeline({ defaults: { ease: 'power2.inOut' }, onComplete: finishIntro });
-    if (t0 > 0) {
-      // El video ya tiene transform: translate(-50%,-50%) en el CSS para
-      // quedar centrado; GSAP sobrescribe el transform inline, asi que hay que
-      // reescribir los percent en cada extremo para no perder el centrado al
-      // encoger. xPercent/yPercent y scale componen limpio en una sola matrix.
-      introTimeline.fromTo(intro.video,
-        { xPercent: -50, yPercent: -50, scale: 1, top: currentTop + 'px' },
-        { xPercent: -50, yPercent: -50, scale: 0.82, top: targetTop + 'px', duration: t0, onUpdate: matchVideoProjection },
-        0)
-        // El video se desvanece a lo largo de TODA la fase (no en 0.18s).
-        // Si cae a 0 demasiado pronto, el modelo aparece de golpe con su
-        // material real (verde rim, reflejos de escena) y se nota un corte
-        // entre el frame del video (tono dorado) y el modelo. Con el fade
-        // lento, la transicion es continua: el video se vuelve transparente
-        // mientras el modelo de atras sigue mostrando la textura del video
-        // (uIntroProjection=1), asi que durante toda la fase el usuario ve
-        // "lo mismo" haciendose mas pequeno y subiendo.
-        .to(intro.video, { opacity: 0, duration: t0, ease: 'power1.inOut' }, 0)
-        .set(intro.video, { pointerEvents: 'none' }, t0)
-        .set(intro.overlay.querySelector('.ao-intro-backdrop'), { opacity: 0 }, 0)
-        .to(tilt.rotation, { z: 0, duration: t0 }, 0)
-        .to(stage.position, { x: pose.x, y: pose.y, duration: t0 }, 0)
-        .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration: t0 }, 0)
-        // La iluminacion del modelo se prepara en la primera mitad (debajo de
-        // la proyeccion del video, que sigue entera). uIntroProjection se
-        // quita solo en el ultimo 20% de la fase, cuando el video ya esta
-        // casi transparente, para que el cambio al material real no se note.
-        .to(uniforms.uEnvironmentMix, { value: 1, duration: 0.5 }, 0)
-        .to(uniforms.uBaseMix, { value: 0.18, duration: 0.5 }, 0)
-        .to(uniforms.uIntroProjection, { value: 0, duration: 0.2 }, t0 - 0.2)
-        .to(uniforms.uRim, { value: LOOK.rim, duration: 0.5 }, 0.3)
-        .to(rim, { intensity: LOOK.rimLight, duration: 0.5 }, 0.3)
-        .add(releaseContent, 0);
-    } else {
-      introTimeline
-        .to(intro.video, { opacity: 0, duration: 0.18, ease: 'power1.inOut' }, 0)
-        .set(intro.overlay.querySelector('.ao-intro-backdrop'), { opacity: 0 }, 0)
-        .to(tilt.rotation, { z: 0, duration: 0.9 }, 0.08)
-        .to(stage.position, { x: pose.x, y: pose.y, duration: 0.9 }, 0.08)
-        .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration: 0.9 }, 0.08)
-        // La iluminacion pasa de dorada a verde DEBAJO de la proyeccion, que sigue
-        // entera: por eso existe, para que ese cambio no se vea ocurrir. Solo
-        // cuando ya ha terminado se levanta la proyeccion, y lo que aparece
-        // debajo es un modelo que ya esta en su color final. Si la proyeccion se
-        // va antes (como pasaba con 0.08s), se ve al modelo virar en directo.
-        .to(uniforms.uEnvironmentMix, { value: 1, duration: 0.5 }, 0)
-        .to(uniforms.uBaseMix, { value: 0.18, duration: 0.5 }, 0)
-        .to(uniforms.uIntroProjection, { value: 0, duration: 0.5 }, 0.3)
-        .to(uniforms.uRim, { value: LOOK.rim, duration: 0.7 }, 0.2)
-        .to(rim, { intensity: LOOK.rimLight, duration: 0.7 }, 0.2)
-        .add(releaseContent, 0.4);
-    }
+    const pose = restPose(camera, rect.height);
+    // Una sola trayectoria controla el fotograma y la pieza. El metal conserva
+    // su cuerpo mientras sube; el relevo sucede al desacelerar, ya junto al título.
+    const duration = isMobile() ? 1.25 : 1.1;
+    // Funde las dos superficies antes de moverlas: el vídeo
+    // y WebGL redondean de forma distinta los bordes de los reflejos.
+    const transfer = 0.16;
+    introTimeline = gsap.timeline({ defaults: { ease: 'power2.inOut' }, onUpdate: updateIntroFrame, onComplete: finishIntro });
+    introTimeline.to(intro.overlay, { opacity: 0, duration: transfer, ease: 'sine.inOut' }, 0);
+    introTimeline
+      .to(stage.position, { x: pose.x, y: pose.y, duration }, transfer)
+      .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration }, transfer)
+      .to(tilt.rotation, { z: 0, duration: 0.55 }, transfer + duration - 0.55)
+      .to(uniforms.uEnvironmentMix, { value: 1, duration: 0.5 }, 0)
+      .to(uniforms.uBaseMix, { value: 0.18, duration: 0.5 }, 0)
+      .to(uniforms.uRim, { value: LOOK.rim, duration: 0.5 }, 0)
+      .to(rim, { intensity: LOOK.rimLight, duration: 0.5 }, 0)
+      .to(handoff.uniforms.mixAmount, { value: 0, duration: 0.55 }, transfer + duration - 0.55)
+      .add(releaseContent, isMobile() ? 0.28 : 0.35);
   }
 
   const draco = new DRACOLoader().setDecoderPath('vendor/three/addons/libs/draco/gltf/');
@@ -426,34 +402,14 @@ function start() {
       node.material.normalScale.setScalar(0.15);
       node.material.roughnessMap = null;
       applySteel(node.material, uniforms, { ...LOOK, tint: '#eeeeee', roughness: 0.22, envIntensity: 1.1 });
-      node.material.userData.introMatrix = new THREE.Matrix4();
       const steelShader = node.material.onBeforeCompile;
       node.material.onBeforeCompile = shader => {
         steelShader(shader);
-        shader.uniforms.uIntroMatrix = { value: node.material.userData.introMatrix };
-        shader.vertexShader = 'uniform mat4 uIntroMatrix;\nvarying vec4 vIntroClip;\n' + shader.vertexShader.replace('#include <project_vertex>', `
-          #include <project_vertex>
-          vIntroClip = uIntroMatrix * vec4(transformed, 1.0);
-        `);
         const environmentChunk = THREE.ShaderChunk.envmap_physical_pars_fragment.replace(
           /textureCubeUV\( envMap, ([^;]+) \)/g,
           'mix(textureCubeUV(envMap, $1), textureCubeUV(uSiteEnvironment, $1), uEnvironmentMix)'
         );
         shader.fragmentShader = 'uniform sampler2D uSiteEnvironment;\nuniform float uEnvironmentMix;\n' + shader.fragmentShader.replace('#include <envmap_physical_pars_fragment>', environmentChunk);
-        shader.fragmentShader = 'varying vec4 vIntroClip;\nuniform sampler2D uIntroFrame;\nuniform float uIntroProjection;\nuniform vec2 uIntroResolution;\nuniform vec2 uIntroFit;\nuniform vec2 uIntroOffset;\n' + shader.fragmentShader.replace('#include <dithering_fragment>', `
-          // Conserva los reflejos del último fotograma sobre la superficie real
-          // durante el relevo; luego cede a la iluminación interactiva.
-          if (uIntroProjection > 0.0) {
-            vec2 videoUv = (vIntroClip.xy / vIntroClip.w * 0.5) * uIntroFit + 0.5 + uIntroOffset;
-            vec3 videoColor = texture2D(uIntroFrame, videoUv).rgb;
-            gl_FragColor.rgb = mix(gl_FragColor.rgb, pow(videoColor, vec3(2.2)), uIntroProjection);
-            // El fondo horneado no debe volverse a tonemapear y formar parches
-            // oscuros sobre los huecos de la silueta: deja ver el fondo CSS.
-            float foreground = smoothstep(0.075, 0.12, max(videoColor.r, max(videoColor.g, videoColor.b)));
-            gl_FragColor.a *= mix(1.0, foreground, uIntroProjection);
-          }
-          #include <dithering_fragment>
-        `);
       };
     } });
 

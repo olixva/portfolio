@@ -38,11 +38,13 @@ Se cargan en orden y **ese orden importa**: `01-base` (variables, reinicio, tipo
 
 La entrada reproduce `assets/intro.mp4` en cada recarga, con la cabecera visible. El vídeo se descarga completo y el GLB carga en paralelo. El relevo espera la compilación del 3D y las fuentes; el último fotograma se proyecta brevemente sobre el modelo para conservar los reflejos mientras cambia la iluminación de dorado a verde. Con movimiento reducido se muestra directamente el modelo. El arranque llama directamente a `load()` y `play()` tras descargar el vídeo, sin depender de `canplay` (Safari puede aplazar la precarga). Si el navegador bloquea la reproducción, aparece «Entrar». El MP4 usa H.264 High nivel 4.0, yuv420p, cuatro referencias y faststart. El fondo CSS permanece en #111210 durante toda la entrada.
 
-Pruebas de navegador (Chrome y Playwright disponibles):
+Pruebas de navegador (Chrome, Playwright y pngjs disponibles):
 
 ```sh
 NODE_PATH=/ruta/a/node_modules node scripts/test-intro.cjs http://localhost:8000
 NODE_PATH=/ruta/a/node_modules node scripts/test-hero-layout.cjs http://localhost:8000
+NODE_PATH=/ruta/a/node_modules node scripts/test-hero-handoff.cjs http://localhost:8000
+NODE_PATH=/ruta/a/node_modules node scripts/test-surface-handoff.cjs http://localhost:8000
 NODE_PATH=/ruta/a/node_modules node scripts/test-intro-safari.cjs http://localhost:8000
 ```
 
