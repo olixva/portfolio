@@ -33,14 +33,12 @@ Las clases que ya no aparecen en el marcado se van: una regla que no puede casar
 - `js/ui.js`: acordeones, cinta de tecnologías y menú móvil.
 - `js/cursor.js`: cursor y halo.
 - `js/hero/hero3d.js`: carga, render, interacción y presentación del hero.
-- `js/hero/intro.js`: puerta de entrada, precarga del vídeo, reproducción y espera del último fotograma.
+- `js/hero/intro.js`: precarga del vídeo, reproducción y espera del último fotograma.
 - `js/hero/sculpture.js`: material y entorno, compartidos con el panel de ajuste.
 - `js/hero/atmosphere.js`: aspecto y composición de las partículas.
 - `js/hero/atmosphere-motion.js`: inercia, emisión y fuerzas locales independientes de la escultura.
 
-La entrada empieza tras una puerta: una pantalla con «Entrar» que aparece en cada recarga. Mientras está delante se cargan el vídeo, el modelo y las fuentes, así que el relevo no se atasca en una visita en frío; el botón solo se habilita con las tres cosas listas, con un respaldo de 9 s por si alguna no llega.
-
-Después reproduce `assets/intro.mp4`, con la cabecera visible. El navegador reproduce el vídeo progresivamente mientras carga el GLB. El relevo espera la compilación del 3D y las fuentes, y mezcla el último fotograma completo con el render sin recortarlo sobre la malla. Primero se descubre el material dorado en 3D, con un pequeño giro; después pasa gradualmente a verde y aparece la atmósfera. Los reflejos del material dorado son una aproximación, porque la geometría no coincide exactamente con el vídeo. Con movimiento reducido no hay puerta ni entrada: se muestra directamente el modelo. Si el navegador bloquea la reproducción del vídeo, aparece «Reproducir». El fondo CSS permanece en #111210 durante toda la entrada.
+La entrada reproduce `assets/intro.mp4` en cada recarga, con la cabecera visible. El navegador reproduce el vídeo progresivamente mientras carga el GLB. El relevo espera la compilación del 3D y las fuentes, y mezcla el último fotograma completo con el render sin recortarlo sobre la malla. Primero se descubre el material dorado en 3D, con un pequeño giro; después pasa gradualmente a verde y aparece la atmósfera. Los reflejos del material dorado son una aproximación, porque la geometría no coincide exactamente con el vídeo. Con movimiento reducido se muestra directamente el modelo. El arranque llama a `load()` y `play()` sin depender de `canplay`. Si el navegador bloquea la reproducción, aparece «Entrar». El fondo CSS permanece en #111210 durante toda la entrada.
 
 La subida dura lo mismo en móvil y en escritorio (`INTRO_RISE`).
 
@@ -50,7 +48,7 @@ La atmósfera visual está formada por partículas independientes: reaccionan al
 
 La transformación a verde avanza como una onda sobre las coordenadas de la superficie, con una cresta luminosa breve. El render usa buffers con MSAA (4 muestras en escritorio, 2 en móvil, según soporte), resolución de hasta 2×, filtrado anisotrópico y un microacabado satinado filtrado para evitar parpadeo.
 
-Pruebas de navegador (Chrome, WebKit, Playwright y pngjs disponibles). Todas abren la puerta con `scripts/open-gate.cjs` antes de comprobar nada, igual que haría un visitante:
+Pruebas de navegador (Chrome, WebKit, Playwright y pngjs disponibles):
 
 ```sh
 NODE_PATH=/ruta/a/node_modules node scripts/test-intro.cjs http://localhost:8000

@@ -10,13 +10,6 @@
 // pide el vídeo.
 const INTRO_URL = 'assets/intro.mp4?v=bf3a5343';
 
-// Lo que tiene que estar listo antes de habilitar el boton de la puerta:
-// mientras esta delante se carga todo por detras.
-const NEEDED = ['video', 'model', 'fonts'];
-// Si algo no llega, se abre igual: mas vale una entrada con tirones que un
-// boton que no se enciende nunca.
-const PATIENCE = 9000;
-
 let state = null;
 
 function build() {
@@ -24,7 +17,7 @@ function build() {
   clearTimeout(window.aoIntroWatchdog);
   const overlay = document.createElement('div');
   overlay.className = 'ao-intro';
-  overlay.innerHTML = '<div class="ao-intro-backdrop"></div><video muted playsinline preload="auto" aria-hidden="true"></video><span class="ao-intro-loader" role="status" aria-label="Cargando"><i></i></span><button class="ao-intro-play" hidden>Reproducir</button>';
+  overlay.innerHTML = '<div class="ao-intro-backdrop"></div><video muted playsinline preload="auto" aria-hidden="true"></video><span class="ao-intro-loader" role="status" aria-label="Cargando"><i></i></span><button class="ao-intro-play" hidden>Entrar</button>';
   document.body.append(overlay);
   const video = overlay.querySelector('video');
   const loader = overlay.querySelector('.ao-intro-loader');
@@ -39,31 +32,6 @@ function build() {
   };
   video.muted = video.defaultMuted = true;
   video.playsInline = true;
-
-  // --- La puerta --------------------------------------------------------
-  const gate = document.getElementById('ao-gate');
-  const enter = document.getElementById('ao-gate-enter');
-  const pending = new Set(NEEDED);
-  const onEnter = [];
-  let opened = false, patience = 0;
-
-  const allow = () => {
-    if (!enter || !enter.disabled) return;
-    clearTimeout(patience);
-    enter.disabled = false;
-    enter.querySelector('.ao-gate-label').textContent = 'Entrar';
-  };
-  const ready = what => {
-    pending.delete(what);
-    if (!pending.size) allow();
-  };
-  const open = () => {
-    if (opened || disposed) return;
-    opened = true;
-    gate?.classList.add('is-open');
-    for (const fn of onEnter) fn();
-    play();
-  };
   const offerPlayback = () => {
     if (finished || disposed) return;
     loader.hidden = true;
@@ -93,19 +61,6 @@ function build() {
     }
   }
   button.addEventListener('click', play);
-  if (gate && enter) {
-    enter.addEventListener('click', open);
-    patience = setTimeout(allow, PATIENCE);
-    video.addEventListener('canplaythrough', () => ready('video'), { once: true });
-    video.addEventListener('error', () => ready('video'), { once: true });
-    // Un video corto puede quedarse en readyState 4 antes de que se enganche
-    // el escuchador, y entonces canplaythrough no vuelve a dispararse.
-    if (video.readyState >= 4) ready('video');
-    document.fonts.ready.then(() => ready('fonts'));
-  } else {
-    // Sin puerta en el documento, la entrada se comporta como antes.
-    ready('video'); ready('model'); ready('fonts');
-  }
   const resume = () => { if (!document.hidden && video.paused && button.hidden) play(); };
   document.addEventListener('visibilitychange', resume);
   // Asignación directa al <video>: el navegador pide el MP4, hace Range
@@ -113,21 +68,13 @@ function build() {
   // fetch, sin blob, sin createObjectURL, sin esperar a los ~1.2 MB enteros.
   video.src = INTRO_URL;
   video.load();
-  // Nada de play() aqui: la puerta manda. Sin puerta, se arranca como antes.
-  if (!gate || !enter) open();
+  play();
   state = {
     overlay, video, ended,
-    // hero3d avisa cuando el modelo esta cargado y compilado, que es la otra
-    // mitad de lo que se esta cargando detras de la puerta.
-    ready,
-    // Se ejecuta dentro del click que abre la puerta, no despues.
-    onEnter(fn) { if (opened) fn(); else onEnter.push(fn); },
     waiting() { if (finished && !disposed) loader.hidden = false; },
     hideLoader() { loader.hidden = button.hidden = true; },
     dispose() {
       disposed = true;
-      clearTimeout(patience);
-      gate?.classList.add('is-open');
       finish();
       clearTimeout(playbackTimer);
       document.removeEventListener('visibilitychange', resume);

@@ -11,7 +11,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ACID, LOOK, GOLD_ENV, SITE_ENV, buildEnvironment, applySteel, applyTransition, makeUniforms } from './sculpture.js?v=0f0886b3';
 
 import { createAtmosphere } from './atmosphere.js?v=0a9f5880';
-import { prepareIntro } from './intro.js?v=23ff9207';
+import { prepareIntro } from './intro.js?v=2c56723e';
 
 const MODEL = 'assets/ao-sculpture.glb?v=e9ab29ff';
 // La subida dura lo mismo en móvil y escritorio. De aquí cuelga toda la
@@ -381,7 +381,6 @@ function start() {
     composer.render();
     handoff.enabled = false;
     readyForHandoff = true;
-    intro.ready('model');
     await intro.ended;
     await document.fonts.ready;
     if (!introRunning) return;
@@ -436,18 +435,10 @@ function start() {
   }
 
   const draco = new DRACOLoader().setDecoderPath('vendor/three/addons/libs/draco/gltf/');
-  const giveUp = () => {
+  const modelTimeout = setTimeout(() => {
     finishIntro();
     if (!model) { canvas.style.opacity = '0'; root.classList.remove('ao3d-pending'); }
-  };
-  let modelTimeout = setTimeout(giveUp, 45000);
-  // La cuenta atras vigila un modelo que no llega, no lo que tarde el visitante
-  // en pulsar: al abrir la puerta se reinicia, y si la escultura ya está no se
-  // vuelve a armar porque no queda nada que vigilar.
-  intro?.onEnter(() => {
-    clearTimeout(modelTimeout);
-    if (!model) modelTimeout = setTimeout(giveUp, 45000);
-  });
+  }, 45000);
   new GLTFLoader().setDRACOLoader(draco).load(MODEL, gltf => {
     if (!intro) clearTimeout(modelTimeout);
     model = gltf.scene;
@@ -560,7 +551,6 @@ function start() {
     else { canvas.style.opacity = '1'; releaseContent(); }
   }, undefined, error => {
     clearTimeout(modelTimeout);
-    intro?.ready('model');
     draco.dispose();
     console.warn('No se pudo cargar la escultura, se usa el fallback CSS:', error);
     intro?.dispose();

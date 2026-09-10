@@ -1,6 +1,5 @@
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
-const openGate = require('./open-gate.cjs');
 (async () => {
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   try {
@@ -18,7 +17,6 @@ const openGate = require('./open-gate.cjs');
         await route.fulfill({ response, body });
       });
       await page.goto(process.argv[2] || 'http://localhost:8000', { waitUntil: 'domcontentloaded' });
-      await openGate(page);
       await page.waitForFunction(() => window.surfaceJoin?.videoOpacity !== undefined);
       const join = await page.evaluate(() => window.surfaceJoin);
       assert.equal(join.after, join.before, 'Handoff must not compile a shader when the video ends');

@@ -1,6 +1,5 @@
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
-const openGate = require('./open-gate.cjs');
 (async () => {
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const errors = [];
@@ -17,7 +16,6 @@ const openGate = require('./open-gate.cjs');
         await route.fulfill({ response, body });
       });
       await page.goto(process.argv[2] || 'http://localhost:8000', { waitUntil: 'domcontentloaded' });
-      await openGate(page);
       await page.waitForFunction(() => !!window.heroTest?.timeline);
       const gold = await page.evaluate(() => {
         const { ctx, timeline, goldStart } = window.heroTest;
