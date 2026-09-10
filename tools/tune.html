@@ -65,7 +65,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './js/hero/sculpture.js';
+import { ACID, LOOK, GOLD_ENV, SITE_ENV, buildEnvironment, applySteel, applyTransition, makeUniforms } from './js/hero/sculpture.js';
 
 const BASE = JSON.parse(JSON.stringify(LOOK));
 const look = JSON.parse(JSON.stringify(LOOK));
@@ -85,6 +85,11 @@ const rimLight = new THREE.DirectionalLight(ACID, look.rimLight); rimLight.posit
 const lamp = new THREE.PointLight(ACID, 0, 6, 2); lamp.position.set(0,0,1.4); scene.add(lamp);
 
 const uniforms = makeUniforms(look);
+// 0 = el metal con el que entra la pieza, 1 = el verde en el que se queda.
+// Es el mismo uniform que anima el hero, así que el barrido se ve igual aquí.
+const state = { mix: 1 };
+uniforms.uEnvironmentMix = { value: state.mix };
+uniforms.uSiteEnvironment = { value: null };
 const tilt = new THREE.Group(); scene.add(tilt);
 let materials = [];
 
@@ -98,7 +103,9 @@ composer.addPass(new OutputPass());
 
 function rebuildEnv() {
   if (scene.environment) scene.environment.dispose();
-  scene.environment = buildEnvironment(renderer, look);
+  scene.environment = buildEnvironment(renderer, GOLD_ENV(look));
+  uniforms.uSiteEnvironment.value?.dispose();
+  uniforms.uSiteEnvironment.value = buildEnvironment(renderer, SITE_ENV(look));
 }
 rebuildEnv();
 
@@ -112,7 +119,13 @@ addEventListener('resize', resize); resize();
 const draco = new DRACOLoader().setDecoderPath('vendor/three/addons/libs/draco/gltf/');
 new GLTFLoader().setDRACOLoader(draco).load('assets/ao-sculpture.glb', gltf => {
   const model = gltf.scene;
-  model.traverse(n => { if (n.isMesh) { applySteel(n.material, uniforms, look); materials.push(n.material); } });
+  model.traverse(n => { if (n.isMesh) {
+    n.material.roughnessMap = null;
+    applySteel(n.material, uniforms, look);
+    n.geometry.computeBoundingBox();
+    applyTransition(n.material, n.geometry.boundingBox);
+    materials.push(n.material);
+  } });
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3());
   model.position.sub(box.getCenter(new THREE.Vector3()));
@@ -162,8 +175,6 @@ const FIELDS = [
     ['rim', 'Filo ácido', 0, 1.5, .01]
   ]],
   ['Entorno', [
-    ['horizon', 'Altura del horizonte', .2, .9, .01],
-    ['ground', 'Claridad del suelo', 0, 1, .01],
     ['envSun', 'Softbox principal', 0, 20, .2],
     ['envAcid', 'Softbox ácido', 0, 20, .2],
     ['envFill', 'Relleno frontal', 0, 20, .2]
@@ -186,6 +197,17 @@ const FIELDS = [
 
 const controls = document.getElementById('controls');
 const inputs = {};
+
+const stateSet = document.createElement('fieldset');
+stateSet.innerHTML = '<legend>Estado</legend>'
+  + '<label><span>Metal de la intro → verde de reposo</span><output>1</output>'
+  + '<input type="range" min="0" max="1" step="0.01" value="1"></label>';
+stateSet.querySelector('input').addEventListener('input', event => {
+  state.mix = parseFloat(event.target.value);
+  uniforms.uEnvironmentMix.value = state.mix;
+  stateSet.querySelector('output').textContent = state.mix;
+});
+controls.append(stateSet);
 for (const [title, rows] of FIELDS) {
   const set = document.createElement('fieldset');
   set.innerHTML = '<legend>' + title + '</legend>';
@@ -217,7 +239,7 @@ for (const [title, rows] of FIELDS) {
 }
 
 function update(name) {
-  if (['horizon','ground','envSun','envAcid','envFill'].includes(name)) rebuildEnv();
+  if (['envSun','envAcid','envFill'].includes(name)) rebuildEnv();
   renderer.toneMappingExposure = look.exposure;
   ambient.intensity = look.ambient;
   key.intensity = look.keyLight;

@@ -4,55 +4,67 @@
 import * as THREE from 'three';
 
 export const ACID = '#dcff54';
+export const GOLD = '#f0b968';
 
 export const LOOK = {
-  // Material
-  tint: '#cdd2d6',       // color del metal
+  // Material. Cromo: el color casi neutro es solo un tinte sobre el reflejo,
+  // quien manda es el entorno. Rugosidad baja para que los softboxes salgan
+  // como filos y no como manchas.
+  tint: '#efe9e2',
   useBaseMap: false,     // conserva opcionalmente el color horneado del modelo
-  roughness: 0.5,       // multiplica el mapa de rugosidad del modelo
+  roughness: 0.12,       // multiplica el mapa de rugosidad del modelo
   metalness: 1,
-  envIntensity: 0.7,
+  envIntensity: 1.25,
   rim: 0.16,             // filo ácido por fresnel
-  // Escena
-  exposure: 1.08,
-  keyLight: 0.45,
+  // Escena. Exposición por debajo de 1: los negros del estudio tienen que
+  // quedarse negros, si no el metal se va a gris uniforme.
+  exposure: 0.96,
+  keyLight: 0.22,
   rimLight: 0.3,
-  ambient: 0.07,
+  ambient: 0.03,
   // Reacción al puntero. A cero, el ratón no hace nada cerca de la pieza.
   lamp: 1.55,          // lámpara del cursor: reflejo localizado, sin bañar la escena
   deform: 0,             // deformación de la superficie al acercarte
   follow: 1,             // 1 = la pieza gira siguiendo al puntero
   // Entorno
-  envSun: 2.9,             // tira principal
-  envAcid: 1,          // tira ácida: acento en un canto, no tinte general
-  envFill: 1.2,          // relleno frontal
-  horizon: 0.6,          // altura del corte cielo/suelo
-  ground: 0.3,           // suelo oscuro, pero sin reflejos que caigan a negro
+  envSun: 9.0,           // tiras blancas rasantes
+  envAcid: 9.5,          // tiras de acento: el champán del dorado, el filo del verde
+  envFill: 0.35,         // relleno frontal, muy justo
   // Bloom
   bloomStrength: 0.07,
   bloomRadius: 0.34,
   bloomThreshold: 1.05
 };
 
-// El acero solo existe si hay algo que reflejar. Cúpula con horizonte marcado
-// más softboxes: sin ese corte brusco entre cielo y suelo, las superficies
-// planas devuelven un gris uniforme y la pieza parece plástico.
+// Los dos estados del metal comparten la geometría de luces y solo cambian el
+// acento: así el barrido entre ellos se lee como la misma pieza bajo otra luz,
+// no como dos materiales distintos pegados.
+export const GOLD_ENV = look => ({ ...look, envAccent: GOLD });
+// El ácido es mucho más luminoso que el oro: a la misma potencia se come los
+// blancos y la pieza deja de leerse como cromo para parecer plástico verde.
+// Baja el acento y sube las tiras frías para conservar los brillos de metal.
+export const SITE_ENV = look => ({
+  ...look, envAccent: ACID,
+  envAcid: look.envAcid * 0.55, envSun: look.envSun * 1.2
+});
+
+// El acero solo existe si hay algo que reflejar. Estudio oscuro con tiras
+// rasantes: la luz frontal ancha lo aplanaba a plata mate, y es el contraste
+// entre negro y filo lo que hace que se lea como cromo.
 export function buildEnvironment(renderer, look = LOOK) {
   const scene = new THREE.Scene();
+  const accent = look.envAccent || GOLD;
 
   const sky = document.createElement('canvas');
   sky.width = 8; sky.height = 2048;
   const c = sky.getContext('2d');
+  // Ni negro plano ni gris: una caída muy tenue da a las zonas sin softbox algo
+  // de dirección, para que el metal no parezca recortado sobre nada.
   const grad = c.createLinearGradient(0, 0, 0, 2048);
-  const g = Math.max(0, Math.min(1, look.ground));
-  const floor = new THREE.Color(0x1b1e17).lerp(new THREE.Color(0x9aa08c), g);
-  const h = Math.max(0.2, Math.min(0.9, look.horizon));
-  grad.addColorStop(0, '#ffffff');
-  grad.addColorStop(h * 0.55, '#e7ebe0');
-  grad.addColorStop(h - 0.035, '#7d8375');
-  grad.addColorStop(h + 0.012, '#' + floor.getHexString());
-  grad.addColorStop(1, '#171914');
-  c.fillStyle = look.studio ? '#080807' : grad;
+  grad.addColorStop(0, '#191b16');
+  grad.addColorStop(0.5, '#0c0d0a');
+  grad.addColorStop(1, '#040403');
+  c.fillStyle = grad;
   c.fillRect(0, 0, 8, 2048);
   const texture = new THREE.CanvasTexture(sky);
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -77,12 +89,21 @@ export function buildEnvironment(renderer, look = LOOK) {
   };
 
   // Softboxes: son las bandas que se ven viajar por el metal al girar.
-  box('#ffffff', look.envSun, 1.3, 8, [-4.6, 2.0, 2.2], [0, Math.PI / 2.6, 0.22]);
-  box('#ffffff', look.envSun * 0.45, 0.5, 7, [-3.0, 3.2, 4.4], [0, Math.PI / 4, 0.5]);
-  box(look.envAccent || ACID, look.envAcid, 0.8, 7, [4.6, 0.2, 1.2], [0, -Math.PI / 2.6, -0.18]);
-  box('#ffffff', look.envFill, 1.6, 9, [1.6, 1.4, 6.6], [0, Math.PI, 0.55]);
-  box(look.envAccent || '#ffffff', look.envFill * 0.4, 0.9, 8, [-2.4, -0.6, 6.2], [0, Math.PI, -0.5]);
-  box('#c9cec4', 1.4, 5, 1.4, [1.0, -3.6, 2.2], [-Math.PI / 2.6, 0, 0]);
+  // Ancha y alta a la izquierda: el barrido plateado de los lomos.
+  box('#ffffff', look.envSun, 2.2, 9, [-4.0, 2.6, 2.6], [0, Math.PI / 2.8, 0.34]);
+  // Estrecha y de canto a la derecha: el filo frío que separa la pieza del fondo.
+  box('#ffffff', look.envSun * 0.6, 0.5, 8, [4.3, 3.0, 0.2], [0, -Math.PI / 2.3, -0.30]);
+  // Acento bajo y ancho: el champán (o el ácido) que llena los vientres y las
+  // caras internas. Es el que da el color, así que va grande y rasante.
+  box(accent, look.envAcid, 2.4, 9, [3.6, -1.6, 2.8], [0, -Math.PI / 2.9, -0.20]);
+  box(accent, look.envAcid * 0.7, 1.6, 7, [-3.2, -2.2, 3.2], [0, Math.PI / 3.0, 0.26]);
+  // Cenital ancha: el gris claro de las caras superiores. Sin ella la pieza
+  // se queda en negro con filos de color y pierde el cuerpo de cromo.
+  box('#ffffff', look.envSun * 0.28, 4, 2.2, [-0.8, 4.2, 1.2], [Math.PI / 2.2, 0, 0]);
+  // Relleno frontal muy justo: evita el negro puro sin aplanar el volumen.
+  box('#ffffff', look.envFill, 1.6, 5, [0.6, 1.0, 6.4], [0, Math.PI, 0.35]);
+  // Rebote de suelo, teñido del acento.
+  box(accent, look.envFill * 1.1, 5, 1.6, [0.4, -3.2, 1.8], [-Math.PI / 2.4, 0, 0]);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   const env = pmrem.fromScene(scene, 0.02).texture;
@@ -132,6 +153,60 @@ export function applySteel(material, uniforms, look = LOOK) {
   };
 
   material.needsUpdate = true;
+}
+
+// Segunda capa sobre applySteel: el barrido que cambia el metal de un entorno
+// al otro. Los uniforms que lee, uEnvironmentMix y uSiteEnvironment, ya entran
+// por applySteel. Vive aquí, y no en hero3d.js, para que el panel de ajuste
+// vea exactamente el mismo shader que la web.
+export function applyTransition(material, bounds) {
+  const steelShader = material.onBeforeCompile;
+  material.onBeforeCompile = shader => {
+    steelShader(shader);
+    shader.uniforms.uSteelMin = { value: bounds.min.clone() };
+    shader.uniforms.uSteelSize = { value: bounds.getSize(new THREE.Vector3()).max(new THREE.Vector3(0.001, 0.001, 0.001)) };
+    shader.vertexShader = 'uniform vec3 uSteelMin, uSteelSize;\nvarying vec3 vSteelSurface;\n' + shader.vertexShader.replace('#include <begin_vertex>', `
+      #include <begin_vertex>
+      vSteelSurface = (position - uSteelMin) / uSteelSize;
+    `);
+    const transformation = `
+      uniform sampler2D uSiteEnvironment;
+      uniform float uEnvironmentMix;
+      varying vec3 vSteelSurface;
+      float steelWave() {
+        vec3 p = vSteelSurface;
+        // La presión nace en el interior y alcanza primero los relieves
+        // centrales, después los extremos de la pieza.
+        return length((p - vec3(0.5))*vec3(1.0,0.85,0.2))
+          + sin(p.x*12.0+p.y*8.0)*0.018 + sin(p.y*19.0-p.z*5.0)*0.012;
+      }
+      float steelFront() { return mix(-0.06,0.76,uEnvironmentMix); }
+      float steelGreen() { return 1.0-smoothstep(steelFront()-0.045,steelFront()+0.045,steelWave()); }
+    `;
+    const environmentChunk = THREE.ShaderChunk.envmap_physical_pars_fragment.replace(
+      /textureCubeUV\( envMap, ([^;]+) \)/g,
+      'mix(textureCubeUV(envMap, $1), textureCubeUV(uSiteEnvironment, $1), steelGreen())'
+    );
+    shader.fragmentShader = transformation + shader.fragmentShader
+      .replace('#include <envmap_physical_pars_fragment>', environmentChunk)
+      .replace('uRimColor * fresnel * uRim', 'uRimColor * fresnel * uRim * steelGreen()')
+      .replace('#include <opaque_fragment>', `
+        float waveDistance = (steelWave()-steelFront())/0.035;
+        float crest = exp(-waveDistance*waveDistance);
+        float activeWave = smoothstep(0.0,0.12,uEnvironmentMix)*(1.0-smoothstep(0.88,1.0,uEnvironmentMix));
+        float grazing = pow(1.0-clamp(abs(dot(normalize(normal),normalize(vViewPosition))),0.0,1.0),2.0);
+        float core = exp(-steelWave()*steelWave()*45.0)*sin(uEnvironmentMix*3.14159)*activeWave;
+        outgoingLight += vec3(0.78,1.0,0.32)*(crest*(0.3+grazing*0.8)+core*0.16)*activeWave;
+        #include <opaque_fragment>
+      `)
+      .replace('#include <roughnessmap_fragment>', `
+        #include <roughnessmap_fragment>
+        // Microacabado satinado, filtrado por la huella del píxel.
+        float grainPhase = vSteelSurface.y*1050.0+sin(vSteelSurface.x*27.0)*2.0;
+        float grainFilter = 1.0-smoothstep(0.4,2.5,fwidth(grainPhase));
+        roughnessFactor = clamp(roughnessFactor+sin(grainPhase)*0.012*grainFilter,0.08,1.0);
+      `);
+  };
 }
 
 export function makeUniforms(look = LOOK) {

@@ -8,7 +8,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=9ecd0025';
+import { ACID, LOOK, GOLD_ENV, SITE_ENV, buildEnvironment, applySteel, applyTransition, makeUniforms } from './sculpture.js?v=0f0886b3';
 
 import { createAtmosphere } from './atmosphere.js?v=0a9f5880';
 import { prepareIntro } from './intro.js?v=2c56723e';
@@ -38,7 +38,7 @@ function createScene(canvas) {
   renderer.toneMappingExposure = LOOK.exposure;
 
   const scene = new THREE.Scene();
-  scene.environment = buildEnvironment(renderer, { ...LOOK, envAccent: '#e9b96e', studio: true, envSun: 4.5, envAcid: 4, envFill: 3 });
+  scene.environment = buildEnvironment(renderer, GOLD_ENV(LOOK));
 
   const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 60);
   camera.position.set(0, 0, 3.6);
@@ -59,7 +59,7 @@ function createScene(canvas) {
 
   const uniforms = makeUniforms(LOOK);
   uniforms.uEnvironmentMix = { value: wantsIntro ? 0 : 1 };
-  uniforms.uSiteEnvironment = { value: buildEnvironment(renderer, { ...LOOK, envAccent: ACID, studio: true, envSun: 4.5, envAcid: 4, envFill: 3 }) };
+  uniforms.uSiteEnvironment = { value: buildEnvironment(renderer, SITE_ENV(LOOK)) };
 
   const stage = new THREE.Group();   // pose: intro → reposo
   const tilt = new THREE.Group();    // giro hacia el puntero
@@ -443,56 +443,9 @@ function start() {
       for (const texture of [node.material.map, node.material.normalMap]) {
         if (texture) texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
       }
-      applySteel(node.material, uniforms, { ...LOOK, tint: '#eeeeee', roughness: 0.26, envIntensity: 1.1 });
+      applySteel(node.material, uniforms, LOOK);
       node.geometry.computeBoundingBox();
-      const materialBounds = node.geometry.boundingBox;
-      const steelShader = node.material.onBeforeCompile;
-      node.material.onBeforeCompile = shader => {
-        steelShader(shader);
-        shader.uniforms.uSteelMin = { value: materialBounds.min.clone() };
-        shader.uniforms.uSteelSize = { value: materialBounds.getSize(new THREE.Vector3()).max(new THREE.Vector3(0.001, 0.001, 0.001)) };
-        shader.vertexShader = 'uniform vec3 uSteelMin, uSteelSize;\nvarying vec3 vSteelSurface;\n' + shader.vertexShader.replace('#include <begin_vertex>', `
-          #include <begin_vertex>
-          vSteelSurface = (position - uSteelMin) / uSteelSize;
-        `);
-        const transformation = `
-          uniform sampler2D uSiteEnvironment;
-          uniform float uEnvironmentMix;
-          varying vec3 vSteelSurface;
-          float steelWave() {
-            vec3 p = vSteelSurface;
-            // La presión nace en el interior y alcanza primero los relieves
-            // centrales, después los extremos de la pieza.
-            return length((p - vec3(0.5))*vec3(1.0,0.85,0.2))
-              + sin(p.x*12.0+p.y*8.0)*0.018 + sin(p.y*19.0-p.z*5.0)*0.012;
-          }
-          float steelFront() { return mix(-0.06,0.76,uEnvironmentMix); }
-          float steelGreen() { return 1.0-smoothstep(steelFront()-0.045,steelFront()+0.045,steelWave()); }
-        `;
-        const environmentChunk = THREE.ShaderChunk.envmap_physical_pars_fragment.replace(
-          /textureCubeUV\( envMap, ([^;]+) \)/g,
-          'mix(textureCubeUV(envMap, $1), textureCubeUV(uSiteEnvironment, $1), steelGreen())'
-        );
-        shader.fragmentShader = transformation + shader.fragmentShader
-          .replace('#include <envmap_physical_pars_fragment>', environmentChunk)
-          .replace('uRimColor * fresnel * uRim', 'uRimColor * fresnel * uRim * steelGreen()')
-          .replace('#include <opaque_fragment>', `
-            float waveDistance = (steelWave()-steelFront())/0.035;
-            float crest = exp(-waveDistance*waveDistance);
-            float activeWave = smoothstep(0.0,0.12,uEnvironmentMix)*(1.0-smoothstep(0.88,1.0,uEnvironmentMix));
-            float grazing = pow(1.0-clamp(abs(dot(normalize(normal),normalize(vViewPosition))),0.0,1.0),2.0);
-            float core = exp(-steelWave()*steelWave()*45.0)*sin(uEnvironmentMix*3.14159)*activeWave;
-            outgoingLight += vec3(0.78,1.0,0.32)*(crest*(0.3+grazing*0.8)+core*0.16)*activeWave;
-            #include <opaque_fragment>
-          `)
-          .replace('#include <roughnessmap_fragment>', `
-            #include <roughnessmap_fragment>
-            // Microacabado satinado, filtrado por la huella del píxel.
-            float grainPhase = vSteelSurface.y*1050.0+sin(vSteelSurface.x*27.0)*2.0;
-            float grainFilter = 1.0-smoothstep(0.4,2.5,fwidth(grainPhase));
-            roughnessFactor = clamp(roughnessFactor+sin(grainPhase)*0.012*grainFilter,0.08,1.0);
-          `);
-      };
+      applyTransition(node.material, node.geometry.boundingBox);
     } });
 
     const box = new THREE.Box3().setFromObject(model);
