@@ -30,7 +30,7 @@ export function prepareIntro(enabled) {
     }
   }
   button.addEventListener('click', play);
-  fetch('assets/intro.mp4', { signal: controller.signal })
+  fetch('assets/intro.mp4?v=e8bc3679', { signal: controller.signal })
     .then(response => { if (!response.ok) throw new Error('Video no disponible'); return response.blob(); })
     .then(blob => {
       if (finished) return;

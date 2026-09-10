@@ -10,9 +10,9 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=9ecd0025';
 
-import { prepareIntro } from './intro.js?v=1af12126';
+import { prepareIntro } from './intro.js?v=a088b5c1';
 
-const MODEL = 'assets/ao-sculpture.glb';
+const MODEL = 'assets/ao-sculpture.glb?v=e9ab29ff';
 
 const root = document.documentElement;
 const hero = document.querySelector('.hero');

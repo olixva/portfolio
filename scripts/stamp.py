@@ -1,4 +1,4 @@
-"""Sella los CSS y JS propios con una huella de su contenido.
+"""Sella con una huella de su contenido todo lo que el navegador cachea.
 
 Sin compilacion no hay quien reviente la cache del navegador, y mantener los
 `?v=` a mano se olvida: se sirve una hoja vieja y se depura un fantasma. Esto
@@ -17,6 +17,14 @@ PAGE = PUBLIC / 'index.html'
 # hero3d importa a sculpture: si solo se sella la pagina, cambiar el material
 # no llega al navegador porque el modulo que lo trae no ha cambiado de nombre.
 MODULE = PUBLIC / 'js' / 'hero' / 'hero3d.js'
+INTRO = PUBLIC / 'js' / 'hero' / 'intro.js'
+
+# El video y el modelo se piden desde JavaScript, no desde el HTML, y sus rutas
+# se resuelven contra la pagina: tanto fetch() como el cargador de GLTF usan la
+# URL del documento como base, no la del modulo que los pide.
+ASSETS = r'(?P<path>assets/[\w.-]+\.(?:mp4|glb|webm|webp|jpg|png|svg))(\?v=[0-9a-f]+)?'
+IMPORTS = r'(?P<path>\./[\w.-]+\.js)(\?v=[0-9a-f]+)?'
+PAGE_REFS = r'(?P<path>(?:css|js)/[\w./-]+\.(?:css|js))(\?v=[0-9a-f]+)?'
 
 
 def fingerprint(path):
@@ -34,22 +42,27 @@ def restamp(text, base, pattern):
 
 
 def stamp(write=True):
-    """Devuelve los ficheros cuya huella no estaba al dia."""
-    stale = []
-    # Primero el modulo, para que su propia huella ya incluya la del importado.
-    module = MODULE.read_text()
-    sealed = restamp(module, MODULE.parent, r'(?P<path>\./[\w.-]+\.js)(\?v=[0-9a-f]+)?')
-    if sealed != module:
-        stale.append(MODULE.relative_to(ROOT))
-        if write:
-            MODULE.write_text(sealed)
+    """Devuelve los ficheros cuya huella no estaba al dia.
 
-    page = PAGE.read_text()
-    sealed = restamp(page, PUBLIC, r'(?P<path>(?:css|js)/[\w./-]+\.(?:css|js))(\?v=[0-9a-f]+)?')
-    if sealed != page:
-        stale.append(PAGE.relative_to(ROOT))
-        if write:
-            PAGE.write_text(sealed)
+    El orden es de dentro hacia fuera: quien sella a otro tiene que hacerlo
+    despues de que ese otro haya cambiado, o su propia huella nace caducada.
+    """
+    stale = []
+
+    def seal(path, rules):
+        text = original = path.read_text()
+        for base, pattern in rules:
+            text = restamp(text, base, pattern)
+        if text != original:
+            stale.append(path.relative_to(ROOT))
+            if write:
+                path.write_text(text)
+
+    # 1. intro.js apunta al video; 2. hero3d.js al modelo y ademas importa a
+    # intro.js, que acaba de cambiar; 3. la pagina, a todo lo anterior.
+    seal(INTRO, [(PUBLIC, ASSETS)])
+    seal(MODULE, [(PUBLIC, ASSETS), (MODULE.parent, IMPORTS)])
+    seal(PAGE, [(PUBLIC, PAGE_REFS)])
     return stale
 
 
