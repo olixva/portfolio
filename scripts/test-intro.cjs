@@ -73,15 +73,10 @@ const url = process.argv[2] || 'http://localhost:8000';
 
     const blocked = await page();
     await blocked.addInitScript(() => {
-      // Solo el video: la pista de sonido es otro medio y tiene su propio
-      // camino de recuperacion, asi que no debe comerse este rechazo.
       const original = HTMLMediaElement.prototype.play;
       let first = true;
       HTMLMediaElement.prototype.play = function () {
-        if (first && this instanceof HTMLVideoElement) {
-          first = false;
-          return Promise.reject(new DOMException('Blocked', 'NotAllowedError'));
-        }
+        if (first) { first = false; return Promise.reject(new DOMException('Blocked', 'NotAllowedError')); }
         return original.call(this);
       };
     });

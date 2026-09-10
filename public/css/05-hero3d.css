@@ -58,10 +58,8 @@ html.ao3d-intro:not(.ao3d-revealing) body:before{content:"";position:fixed;inset
 
 /* --- Puerta de entrada --------------------------------------------------
    Existe solo si hay entrada que ver: con prefers-reduced-motion o sin WebGL
-   la IIFE de index.html no pone ao3d-intro y aqui no se pinta nada. Sirve para
-   dos cosas a la vez: cargar el video, el modelo y las fuentes por detras, y
-   conseguir el gesto del usuario, sin el cual ningun navegador deja sonar
-   audio. */
+   la IIFE de index.html no pone ao3d-intro y aqui no se pinta nada. Mientras
+   esta delante se cargan el video, el modelo y las fuentes. */
 .ao-gate{display:none}
 .ao3d-intro .ao-gate{
   display:grid;place-items:center;position:fixed;inset:0;z-index:90;

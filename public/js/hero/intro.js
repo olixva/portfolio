@@ -10,11 +10,8 @@
 // pide el vídeo.
 const INTRO_URL = 'assets/intro.mp4?v=bf3a5343';
 
-// Lo que tiene que estar listo antes de habilitar el boton de la puerta. La
-// idea de la puerta es doble: mientras esta delante se carga todo por detras,
-// y el clic con el que se cierra es el gesto que el navegador exige para dejar
-// sonar audio. Sin ese gesto no hay sonido, y un interruptor a posteriori no
-// sirve porque la entrada ya habria pasado.
+// Lo que tiene que estar listo antes de habilitar el boton de la puerta:
+// mientras esta delante se carga todo por detras.
 const NEEDED = ['video', 'model', 'fonts'];
 // Si algo no llega, se abre igual: mas vale una entrada con tirones que un
 // boton que no se enciende nunca.
@@ -40,7 +37,6 @@ function build() {
     clearTimeout(playbackTimer);
     resolveEnded();
   };
-  // Con sonido en la pista aparte: el video va mudo, como siempre.
   video.muted = video.defaultMuted = true;
   video.playsInline = true;
 
@@ -65,8 +61,6 @@ function build() {
     if (opened || disposed) return;
     opened = true;
     gate?.classList.add('is-open');
-    // Los avisos van aqui, sincronos y dentro del click: es la unica forma de
-    // que el navegador acepte el play() del audio en el primer intento.
     for (const fn of onEnter) fn();
     play();
   };

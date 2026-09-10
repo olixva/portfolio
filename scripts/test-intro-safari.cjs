@@ -38,15 +38,10 @@ const url = process.argv[2] || 'http://localhost:8000';
       await page.close();
       const blocked = await browser.newPage(options);
       await blocked.addInitScript(() => {
-        // Solo el video: la pista de sonido tiene su propio camino y no debe
-        // comerse este rechazo.
         const original = HTMLMediaElement.prototype.play;
         let first = true;
         HTMLMediaElement.prototype.play = function () {
-          if (first && this instanceof HTMLVideoElement) {
-            first = false;
-            return Promise.reject(new DOMException('Gesture required', 'NotAllowedError'));
-          }
+          if (first) { first = false; return Promise.reject(new DOMException('Gesture required', 'NotAllowedError')); }
           return original.call(this);
         };
       });
