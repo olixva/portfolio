@@ -1,100 +1,94 @@
 # Portfolio — Antonio Oliva Cárceles
 
-Web estática con HTML, CSS, JavaScript, Three.js y GSAP. Sin instalación de paquetes ni compilación: lo que hay en `public/` es exactamente lo que se sirve. Dependencias y fuentes autoalojadas.
+Portfolio personal con proyectos, hackathons, experiencia y formación. El hero combina una animación de entrada con una escultura 3D interactiva y partículas.
 
-## Desarrollo
+**Web:** [antoniooliva.com](https://antoniooliva.com)
+
+HTML, CSS y JavaScript, con Three.js y GSAP autoalojados. No requiere instalación de paquetes ni compilación: se publica directamente la carpeta `public/`.
+
+## Desarrollo local
+
+Requiere Python 3:
 
 ```sh
 python3 -m http.server 8000 -d public
 ```
 
-Abre http://localhost:8000. Usa HTTP: abrir con `file://` puede bloquear módulos y modelos según el navegador.
+Abre [localhost:8000](http://localhost:8000). Usa un servidor HTTP para que el navegador pueda cargar los módulos, el vídeo y el modelo.
 
 ## Estructura
 
-```
-public/          lo que se publica, sin pasos intermedios
-  index.html     contenido, metadatos y arranque temprano de la intro
-  css/           cinco capas, de lo general a lo concreto
-  js/            main, ui, cursor y la carpeta hero/
-  assets/ fonts/ vendor/
-design/          masters y plantilla de imagen social
-tools/           herramientas de desarrollo; no se publican
-scripts/         comprobaciones y sellado de caché
-```
+| Ruta | Contenido |
+| --- | --- |
+| `public/index.html` | Contenido, metadatos y arranque de la página |
+| `public/css/` | Estilos: base, layout, componentes, secciones y hero, en ese orden |
+| `public/js/` | Navegación, animaciones de scroll, cursor e interfaz |
+| `public/js/hero/` | Escena 3D, entrada, materiales y partículas |
+| `public/assets/` | Vídeo de entrada y modelo GLB |
+| `public/vendor/`, `public/fonts/` | Dependencias, fuentes y licencias |
+| `tools/` | Panel de ajuste visual y diagnóstico de GPU |
+| `scripts/` | Validación y actualización de huellas de caché |
+| `design/` | Recursos de diseño y plantilla de imagen social |
 
-### Las capas de CSS
+## Escultura y animación
 
-Las clases que ya no aparecen en el marcado se van: una regla que no puede casar con nada solo estorba a quien lee la hoja. Se cargan en orden y **ese orden importa**: `01-base` (variables, reinicio, tipografía), `02-layout` (cabecera, sección, pie), `03-components` (piezas reutilizables), `04-sections` (cada sección de la página) y `05-hero3d` (la capa WebGL). Cada selector se declara una sola vez por capa y por consulta de medios; si hace falta un ajuste, va donde ya vive ese selector en lugar de en una hoja nueva al final.
+El vídeo `public/assets/intro.mp4` se reproduce mientras carga el modelo. Al terminar, su último fotograma se funde con la escultura plateada y dorada. Después, una onda transforma los reflejos a verde y emite partículas desde la superficie.
 
-### El JavaScript
+La pieza responde al puntero y permite girarla arrastrando; en móvil gira automáticamente. Las partículas reaccionan al movimiento y a clics breves. La página respeta la preferencia de movimiento reducido y dispone de un fallback si WebGL o el modelo no están disponibles.
 
-- `js/main.js`: scroll, animaciones de entrada y los saltos del menú.
-- `js/ui.js`: acordeones, cinta de tecnologías y menú móvil.
-- `js/cursor.js`: cursor y halo.
-- `js/hero/hero3d.js`: carga, render, interacción y presentación del hero.
-- `js/hero/intro.js`: precarga del vídeo, reproducción y espera del último fotograma.
-- `js/hero/sculpture.js`: material y entorno, compartidos con el panel de ajuste.
-- `js/hero/atmosphere.js`: aspecto y composición de las partículas.
-- `js/hero/atmosphere-motion.js`: inercia, emisión y fuerzas locales independientes de la escultura.
+Los ajustes principales están en:
 
-La entrada reproduce `assets/intro.mp4` en cada recarga, con la cabecera visible. El navegador reproduce el vídeo progresivamente mientras carga el GLB. El relevo espera la compilación del 3D y las fuentes, y mezcla el último fotograma completo con el render sin recortarlo sobre la malla. Primero se descubre el material dorado en 3D, con un pequeño giro; después pasa gradualmente a verde y aparece la atmósfera. Los reflejos del material dorado son una aproximación, porque la geometría no coincide exactamente con el vídeo. Con movimiento reducido se muestra directamente el modelo. El arranque llama a `load()` y `play()` sin depender de `canplay`. Si el navegador bloquea la reproducción, aparece «Entrar». El fondo CSS permanece en #111210 durante toda la entrada.
+- `hero3d.js`: cámara, pose, tiempos, render e interacción.
+- `intro.js`: reproducción y carga del vídeo.
+- `sculpture.js`: paleta, material, luces de estudio y onda de transformación.
+- `atmosphere.js`: cantidad, aspecto y puntos de emisión de partículas.
+- `atmosphere-motion.js`: velocidades, deriva y fuerzas de las partículas.
 
-La subida dura lo mismo en móvil y en escritorio (`INTRO_RISE`).
+Todos ellos se encuentran en `public/js/hero/`. El vídeo y el GLB tienen diferencias geométricas; la continuidad visual depende tanto del material como de la pose y del fundido.
 
-La atmósfera vive en la raíz de la escena, fuera de las transformaciones de la escultura. Cada partícula conserva posición y velocidad, deriva y rebota suavemente en los bordes. El puntero desplaza las partículas cercanas y un clic breve añade un impulso; arrastrar y pulsar enlaces no dispara partículas. El giro de la pieza solo remueve su entorno inmediato. El cálculo usa pasos acotados para mantener la respuesta entre 30 y 120 Hz. Con movimiento reducido se pinta un solo fotograma sin interacción atmosférica.
+### Herramientas visuales
 
-La atmósfera visual está formada por partículas independientes: reaccionan al giro de la pieza, al puntero y a los clics, y se emiten desde la superficie durante la transición dorado-verde.
-
-La transformación a verde avanza como una onda sobre las coordenadas de la superficie, con una cresta luminosa breve. El render usa buffers con MSAA (4 muestras en escritorio, 2 en móvil, según soporte), resolución de hasta 2×, filtrado anisotrópico y un microacabado satinado filtrado para evitar parpadeo.
-
-Pruebas de navegador (Chrome, WebKit, Playwright y pngjs disponibles):
-
-```sh
-NODE_PATH=/ruta/a/node_modules node scripts/test-intro.cjs http://localhost:8000
-NODE_PATH=/ruta/a/node_modules node scripts/test-hero-layout.cjs http://localhost:8000
-NODE_PATH=/ruta/a/node_modules node scripts/test-hero-handoff.cjs http://localhost:8000
-NODE_PATH=/ruta/a/node_modules node scripts/test-surface-handoff.cjs http://localhost:8000
-NODE_PATH=/ruta/a/node_modules node scripts/test-mobile-layout.cjs http://localhost:8000
-NODE_PATH=/ruta/a/node_modules node scripts/test-intro-safari.cjs http://localhost:8000
-NODE_PATH=/ruta/a/node_modules node scripts/test-atmosphere-browser.cjs http://localhost:8000
-node scripts/test-atmosphere.cjs
-```
-
-## Herramientas
-
-Sirve la raíz para acceder a ellas:
+Sirve la raíz del repositorio en un segundo puerto:
 
 ```sh
 python3 -m http.server 8001
 ```
 
-- http://localhost:8001/public/ — portfolio.
-- http://localhost:8001/tools/tune.html — ajuste de material y luces.
-- http://localhost:8001/tools/render-probe.html — diagnóstico numérico de GPU; `invalidAfter` debe ser cero. El resultado original depende de la GPU.
-
-El shader limita la base del Fresnel antes de `pow` para evitar valores NaN que el bloom puede propagar como manchas negras. Conserva ese límite.
+- [Panel de materiales y luces](http://localhost:8001/tools/tune.html).
+- [Diagnóstico de GPU](http://localhost:8001/tools/render-probe.html): `invalidAfter` debe ser cero.
+- [Portfolio](http://localhost:8001/public/).
 
 ## Verificación
 
-Requiere Python 3 y Node.js:
+Requiere Python 3 y Node.js. Después de editar CSS o JavaScript:
 
 ```sh
 python3 scripts/stamp.py
 python3 scripts/check.py
 git diff --check
+node scripts/test-atmosphere.cjs
 ```
 
-`stamp.py` sella cada CSS y JS con una huella de su contenido, para que el navegador no sirva una versión vieja; `check.py` valida la sintaxis del JavaScript propio, comprueba que los recursos locales existan y avisa si alguna huella se ha quedado atrás.
+`stamp.py` actualiza las huellas de los recursos para invalidar la caché. `check.py` comprueba sintaxis, rutas locales y vigencia de esas huellas.
 
-Revisión visual: giro del hero en Chrome y Safari, cursor, recarga desde una sección con ancla, acordeones y layout móvil. Los checks estáticos no detectan fallos de GPU.
+Las pruebas de navegador requieren `playwright`, `pngjs`, Chrome y el navegador WebKit de Playwright. Si los paquetes están fuera del repositorio, configura `NODE_PATH` con la ruta a su carpeta `node_modules`.
+
+```sh
+node scripts/test-intro.cjs http://localhost:8000
+node scripts/test-hero-handoff.cjs http://localhost:8000
+node scripts/test-surface-handoff.cjs http://localhost:8000
+node scripts/test-atmosphere-browser.cjs http://localhost:8000
+node scripts/test-hero-layout.cjs http://localhost:8000
+node scripts/test-mobile-layout.cjs http://localhost:8000
+node scripts/test-intro-safari.cjs http://localhost:8000
+```
+
+Completa la validación con una revisión visual en escritorio y móvil: final del vídeo, reflejos, transformación a verde, arrastre, navegación y movimiento reducido. Los checks estáticos no detectan defectos de renderizado en GPU.
 
 ## Publicación
 
-Se publica `public/` tal cual, sin build. `wrangler.jsonc` define un Worker de Cloudflare que sirve `public/` como recursos estáticos (`assets.directory`), publicado en `antoniooliva.com` y `www.antoniooliva.com` como dominios propios. Las rutas relativas admiten subdirectorios.
+`wrangler.jsonc` configura un Worker de Cloudflare que sirve `public/` en `antoniooliva.com` y `www.antoniooliva.com`. No hay paso de build. Las herramientas y los scripts de desarrollo quedan fuera de la carpeta publicada.
 
-`og:url`, `og:image` y `twitter:image` ya son URL absolutas. La imagen social **no vive en el repositorio**: se sirve desde R2 (`pub-46192d9fcbf84443907c67d71cade960.r2.dev/og.jpg`). Si la regeneras, la plantilla es `design/og-card.html` y hay que volver a subirla a R2, porque cambiar el repositorio no la actualiza.
+La imagen social se sirve desde Cloudflare R2; su plantilla está en `design/og-card.html`. Modificar la plantilla no actualiza la imagen publicada: hay que regenerarla y subirla a R2, conservando o actualizando la URL de los metadatos en `index.html`.
 
-De Draco solo está el descodificador: `hero3d.js` apunta con `setDecoderPath` a `vendor/three/addons/libs/draco/gltf/`, y el codificador —casi un mega— no lo pide nadie en tiempo de ejecución. Si actualizas Three.js, no vuelvas a copiarlo.
-
-Conserva las licencias de terceros en `public/vendor/` y `public/fonts/`.
+Conserva las licencias de las dependencias y fuentes incluidas en `public/vendor/` y `public/fonts/`.

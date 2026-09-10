@@ -90,7 +90,7 @@ export function createAirMotion({ count = 110, random = Math.random } = {}) {
         const depth = (3.6 - body.z) / 3.6;
         const angle = Math.atan2(body.y - origin.y, body.x - origin.x) + (random() - 0.5) * 0.7;
         const reach = Math.hypot(width * depth, height * depth);
-        const speed = reach * (0.38 + random() * 0.65);
+        const speed = reach * (0.24 + random() * 0.48);
         body.vx = Math.cos(angle) * speed;
         body.vy = Math.sin(angle) * speed;
       }

@@ -8,9 +8,9 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { ACID, LOOK, GOLD_ENV, SITE_ENV, buildEnvironment, applySteel, applyTransition, makeUniforms } from './sculpture.js?v=0f0886b3';
+import { ACID, LOOK, GOLD_ENV, SITE_ENV, buildEnvironment, applySteel, applyTransition, makeUniforms } from './sculpture.js?v=bcadf0bc';
 
-import { createAtmosphere } from './atmosphere.js?v=0a9f5880';
+import { createAtmosphere } from './atmosphere.js?v=3c37681b';
 import { prepareIntro } from './intro.js?v=2c56723e';
 
 const MODEL = 'assets/ao-sculpture.glb?v=e9ab29ff';
@@ -408,21 +408,21 @@ function start() {
     // Una sola trayectoria controla el fotograma y la pieza. El metal conserva
     // su cuerpo mientras sube; el relevo sucede al desacelerar, ya junto al título.
     const duration = INTRO_RISE;
-    // Funde las dos superficies antes de moverlas: el vídeo
-    // y WebGL redondean de forma distinta los bordes de los reflejos.
+    // Transfiere el vídeo al compositor antes de mover la imagen. Después,
+    // el fundido descubre el metal sin girarlo hasta terminar el relevo.
     const transfer = 0.16;
-    const goldStart = transfer + duration;
-    const greenStart = goldStart + 0.55;
+    const goldStart = transfer + duration + 0.28;
+    const greenStart = goldStart + 0.7;
     introTimeline = gsap.timeline({ defaults: { ease: 'power2.inOut' }, onUpdate: updateIntroFrame, onComplete: finishIntro });
     introTimeline.to(intro.overlay, { opacity: 0, duration: transfer, ease: 'sine.inOut' }, 0);
     introTimeline
       .to(stage.position, { x: pose.x, y: pose.y, duration }, transfer)
       .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration }, transfer)
-      .to(tilt.rotation, { z: 0, duration: 0.55 }, transfer + duration - 0.55)
-      .to(handoff.uniforms.mixAmount, { value: 0, duration: 0.55 }, transfer + duration - 0.55)
+      .to(tilt.rotation, { z: 0, duration: 0.65 }, goldStart)
+      .to(handoff.uniforms.mixAmount, { value: 0, duration: 0.95, ease: 'sine.inOut' }, goldStart - 0.95)
       // Primero se descubre el metal dorado real. Un giro breve muestra volumen
       // antes de que cambie la iluminación; la atmósfera entra después.
-      .to(tilt.rotation, { y: 0.09, x: -0.025, duration: 0.55 }, goldStart)
+      .to(tilt.rotation, { y: 0.045, x: -0.012, duration: 0.65 }, goldStart)
       .add(() => atmosphere.prepareEmission(model), greenStart)
       .to(tilt.rotation, { y: 0, x: 0, duration: 1.35 }, greenStart)
       .to(uniforms.uEnvironmentMix, { value: 1, duration: 1.35, ease: 'sine.inOut' }, greenStart)
@@ -443,7 +443,6 @@ function start() {
     if (!intro) clearTimeout(modelTimeout);
     model = gltf.scene;
     model.traverse(node => { if (node.isMesh) {
-      node.material.normalScale.setScalar(0.065);
       node.material.roughnessMap = null;
       for (const texture of [node.material.map, node.material.normalMap]) {
         if (texture) texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
