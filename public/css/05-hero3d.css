@@ -20,7 +20,7 @@ html.ao3d-intro .hero .line>span{animation:none!important}
 /* En movil el modelo no comparte sitio con el titular: ocupa una banda propia
    arriba y el texto empieza justo debajo, centrado. Antes iba detras del
    titular a opacidad baja y se solapaban las letras. */
-@media(max-width:760px){.ao3d-canvas{inset:0 0 auto;height:var(--ao3d-band,300px);touch-action:pan-y}html.ao3d-on .hero{--ao3d-band:clamp(260px,42svh,360px);padding-top:calc(var(--ao3d-band) + 26px);text-align:center}html.ao3d-pending .hero{--ao3d-band:clamp(260px,42svh,360px);padding-top:calc(var(--ao3d-band) + 26px);text-align:center}html.ao3d-on .hero-eyebrow{justify-content:center}html.ao3d-pending .hero-eyebrow{justify-content:center}html.ao3d-on .hero-description{margin-inline:auto}html.ao3d-pending .hero-description{margin-inline:auto}html.ao3d-on .hero-description p{margin-inline:auto}html.ao3d-pending .hero-description p{margin-inline:auto}html.ao3d-on .hero-bottom{text-align:left}html.ao3d-pending .hero-bottom{text-align:left}}
+@media(max-width:760px){:root{--ao3d-band:clamp(180px,32svh,280px)}.ao3d-canvas{inset:0 0 auto;height:var(--ao3d-band,300px);touch-action:pan-y}html.ao3d-on .hero{padding-top:calc(var(--ao3d-band) + 12px);text-align:center}html.ao3d-pending .hero{padding-top:calc(var(--ao3d-band) + 12px);text-align:center}html.ao3d-on .hero-eyebrow{justify-content:center}html.ao3d-pending .hero-eyebrow{justify-content:center}html.ao3d-on .hero-description{margin-inline:auto}html.ao3d-pending .hero-description{margin-inline:auto}html.ao3d-on .hero-description p{margin-inline:auto}html.ao3d-pending .hero-description p{margin-inline:auto}html.ao3d-on .hero-bottom{text-align:left}html.ao3d-pending .hero-bottom{text-align:left}}
 @media(prefers-reduced-motion:reduce){.ao3d-canvas{transition:none}.hero .hero-content{transition:none}}
 /* Vídeo y WebGL comparten exactamente el mismo rectángulo durante el relevo. */
 html.ao3d-intro{overflow:hidden}
@@ -47,4 +47,4 @@ html.ao3d-intro:not(.ao3d-revealing) body:before{content:"";position:fixed;inset
 @keyframes loader-spin{to{transform:rotate(360deg)}}
 @keyframes loader-appear{from{opacity:0}to{opacity:1}}
 
-@media(max-width:760px){.ao-intro{top:68px}.ao-intro video{top:calc(clamp(260px,42svh,360px) / 2);width:94vw;height:clamp(260px,42svh,360px)}}
+@media(max-width:760px){.ao-intro{top:68px}.ao-intro video{top:calc(var(--ao3d-band) / 2);width:94vw;height:var(--ao3d-band)}}
