@@ -259,7 +259,7 @@ function start() {
     introRunning = false;
     settledAt = clock.elapsedTime;
     interactionTween?.kill();
-    if (gsap) interactionTween = gsap.to(interaction, { value: 1, duration: 1.2, ease: 'power2.inOut' });
+    if (gsap) interactionTween = gsap.to(interaction, { value: 1, duration: 0.65, ease: 'power2.inOut' });
     else interaction.value = 1;
     tilt.rotation.z = 0;
     uniforms.uEnvironmentMix.value = 1;
@@ -304,18 +304,18 @@ function start() {
     transitioning = true;
     root.classList.add('ao3d-revealing');
     const pose = restPose(camera);
-    introTimeline = gsap.timeline({ defaults: { ease: 'power3.inOut' }, onComplete: finishIntro })
-      .to(intro.video, { opacity: 0, duration: 0.5, ease: 'power1.inOut' }, 0)
+    introTimeline = gsap.timeline({ defaults: { ease: 'power2.inOut' }, onComplete: finishIntro })
+      .to(intro.video, { opacity: 0, duration: 0.18, ease: 'power1.inOut' }, 0)
       .set(intro.overlay.querySelector('.ao-intro-backdrop'), { opacity: 0 }, 0)
-      .to(tilt.rotation, { z: 0, duration: 1.7 }, 0.6)
-      .to(stage.position, { x: pose.x, y: pose.y, duration: 1.7 }, 0.6)
-      .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration: 1.7 }, 0.6)
-      .to(uniforms.uEnvironmentMix, { value: 1, duration: 1.4 }, 0.6)
-      .to(uniforms.uIntroProjection, { value: 0, duration: 0.5 }, 0.1)
-      .to(uniforms.uBaseMix, { value: 0.18, duration: 1.4 }, 0.6)
-      .to(uniforms.uRim, { value: LOOK.rim, duration: 1.2 }, 0.8)
-      .to(rim, { intensity: LOOK.rimLight, duration: 1.2 }, 0.8)
-      .add(releaseContent, 1.3);
+      .to(tilt.rotation, { z: 0, duration: 0.9 }, 0.08)
+      .to(stage.position, { x: pose.x, y: pose.y, duration: 0.9 }, 0.08)
+      .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration: 0.9 }, 0.08)
+      .to(uniforms.uEnvironmentMix, { value: 1, duration: 0.8 }, 0.12)
+      .to(uniforms.uIntroProjection, { value: 0, duration: 0.08 }, 0)
+      .to(uniforms.uBaseMix, { value: 0.18, duration: 0.8 }, 0.12)
+      .to(uniforms.uRim, { value: LOOK.rim, duration: 0.7 }, 0.2)
+      .to(rim, { intensity: LOOK.rimLight, duration: 0.7 }, 0.2)
+      .add(releaseContent, 0.4);
   }
 
   const draco = new DRACOLoader().setDecoderPath('vendor/three/addons/libs/draco/gltf/');
