@@ -26,7 +26,7 @@ html.ao3d-intro .hero .line>span{animation:none!important}
 html.ao3d-intro{overflow:hidden}
 html.ao3d-intro .header,html.ao3d-revealing .header{z-index:70}
 html.ao3d-intro .skip:focus{z-index:80}
-html.ao3d-intro:not(.ao3d-revealing) body:before{content:"";position:fixed;inset:0;background:#000;z-index:59}
+html.ao3d-intro:not(.ao3d-revealing) body:before{content:"";position:fixed;inset:0;background:var(--dark);z-index:59}
 .ao-intro{position:fixed;inset:76px 0 0;z-index:60;pointer-events:none}
 /* El mismo negro que el resto de la pagina, no negro puro: el video trae ese
    fondo horneado, y cualquier otro tono recortaria su rectangulo. */
@@ -39,9 +39,7 @@ html.ao3d-intro:not(.ao3d-revealing) body:before{content:"";position:fixed;inset
    intacta. */
 .ao-intro video{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(82vw,1100px);height:min(72dvh,620px);object-fit:contain;transition:none;mix-blend-mode:lighten}
 .ao-intro video{z-index:2;opacity:0}
-.ao-intro.is-playing video{opacity:1}
-.hero{transition:background-color 1.1s ease}
-html.ao3d-intro:not(.ao3d-revealing) .hero{background-color:#000}
+.ao-intro.is-ready video{opacity:1}
 .ao-intro-loader{position:absolute;bottom:8%;left:50%;z-index:3;animation:loader-appear .3s .25s both}
 .ao-intro-loader i{display:block;width:18px;height:18px;margin-left:-9px;border:1px solid #ffffff30;border-top-color:#e2c699;border-radius:50%;animation:loader-spin .8s linear infinite}
 .ao-intro-play{position:absolute;left:50%;top:75%;transform:translateX(-50%);z-index:4;pointer-events:auto;background:var(--dark);border:1px solid #e2c699;color:#eee;padding:12px 28px;font:inherit;cursor:pointer}

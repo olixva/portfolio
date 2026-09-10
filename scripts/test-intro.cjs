@@ -39,8 +39,8 @@ const url = process.argv[2] || 'http://localhost:8000';
     await mobile.close();
 
     const slow = await page();
-    await slow.route('**/ao-sculpture.glb', async route => { await new Promise(r => setTimeout(r, 7000)); await route.continue(); });
-    await slow.route('**/intro.mp4', async route => { await new Promise(r => setTimeout(r, 600)); await route.continue(); });
+    await slow.route('**/ao-sculpture.glb*', async route => { await new Promise(r => setTimeout(r, 7000)); await route.continue(); });
+    await slow.route('**/intro.mp4*', async route => { await new Promise(r => setTimeout(r, 600)); await route.continue(); });
     await slow.goto(url, { waitUntil: 'domcontentloaded' });
     await slow.waitForSelector('.ao-intro-loader');
     await slow.waitForFunction(() => document.querySelector('video')?.ended);
@@ -56,7 +56,7 @@ const url = process.argv[2] || 'http://localhost:8000';
       window.introEnded = false;
       document.addEventListener('ended', event => { if (event.target.tagName === 'VIDEO') window.introEnded = true; }, true);
     });
-    await independent.route('**/intro.mp4', async route => { await new Promise(r => setTimeout(r, 4000)); await route.continue(); });
+    await independent.route('**/intro.mp4*', async route => { await new Promise(r => setTimeout(r, 4000)); await route.continue(); });
     await independent.goto(url, { waitUntil: 'domcontentloaded' });
     await independent.waitForSelector('.ao-intro.is-playing');
     await finished(independent);
@@ -82,7 +82,7 @@ const url = process.argv[2] || 'http://localhost:8000';
 
     for (const asset of ['intro.mp4', 'ao-sculpture.glb']) {
       const failed = await page();
-      await failed.route('**/' + asset, route => route.abort());
+      await failed.route('**/' + asset + '*', route => route.abort());
       await failed.goto(url, { waitUntil: 'domcontentloaded' });
       await finished(failed);
       console.log('OK: fallo de ' + asset + ' libera el contenido');

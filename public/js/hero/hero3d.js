@@ -6,11 +6,10 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=9ecd0025';
 
-import { prepareIntro } from './intro.js?v=a088b5c1';
+import { prepareIntro } from './intro.js?v=eec1f2c4';
 
 const MODEL = 'assets/ao-sculpture.glb?v=e9ab29ff';
 
@@ -68,11 +67,11 @@ function createScene(canvas) {
   // Buffers HDR estándar para el postprocesado.
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), LOOK.bloomStrength, LOOK.bloomRadius, LOOK.bloomThreshold);
-  composer.addPass(bloom);
+  // Conserva el alfa transparente fuera del modelo. El bloom añadía una capa
+  // tenue sobre todo el lienzo y oscurecía un nivel RGB el fondo al aparecer.
   composer.addPass(new OutputPass());
 
-  return { renderer, scene, camera, composer, bloom, stage, tilt, lamp, rim, uniforms };
+  return { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms };
 }
 
 // La escala se deduce del ancho visible, no de un numero fijo: en movil el
@@ -114,7 +113,7 @@ function start() {
   }
 
   let introFrame = null;
-  const { renderer, scene, camera, composer, bloom, stage, tilt, lamp, rim, uniforms } = ctx;
+  const { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms } = ctx;
   uniforms.uIntroProjection = { value: 0 };
   uniforms.uIntroFrame = { value: null };
   uniforms.uIntroResolution = { value: new THREE.Vector2(1, 1) };
@@ -164,7 +163,6 @@ function start() {
     renderer.setPixelRatio(dpr);
     renderer.setSize(width, height, false);
     composer.setSize(width, height);
-    bloom.enabled = !isMobile();
     renderer.getDrawingBufferSize(uniforms.uIntroResolution.value);
     if (!introRunning) applyRest();
     else if (intro && !transitioning) matchVideoPose();
@@ -244,6 +242,15 @@ function start() {
       (-centerY + 12 * videoScale) / rect.height * 2 * halfHeight, 0);
     tilt.rotation.set(0, 0, 0.035);
     camera.position.z = 3.6;
+    // Ancla el fotograma al modelo, no a la pantalla mientras se desplaza.
+    camera.updateMatrixWorld();
+    scene.updateMatrixWorld(true);
+    model?.traverse(node => {
+      if (node.isMesh && node.material.userData.introMatrix) {
+        node.material.userData.introMatrix.copy(camera.projectionMatrix)
+          .multiply(camera.matrixWorldInverse).multiply(node.matrixWorld);
+      }
+    });
   }
 
   function finishIntro() {
@@ -335,20 +342,31 @@ function start() {
       node.material.normalScale.setScalar(0.15);
       node.material.roughnessMap = null;
       applySteel(node.material, uniforms, { ...LOOK, tint: '#eeeeee', roughness: 0.22, envIntensity: 1.1 });
+      node.material.userData.introMatrix = new THREE.Matrix4();
       const steelShader = node.material.onBeforeCompile;
       node.material.onBeforeCompile = shader => {
         steelShader(shader);
+        shader.uniforms.uIntroMatrix = { value: node.material.userData.introMatrix };
+        shader.vertexShader = 'uniform mat4 uIntroMatrix;\nvarying vec4 vIntroClip;\n' + shader.vertexShader.replace('#include <project_vertex>', `
+          #include <project_vertex>
+          vIntroClip = uIntroMatrix * vec4(transformed, 1.0);
+        `);
         const environmentChunk = THREE.ShaderChunk.envmap_physical_pars_fragment.replace(
           /textureCubeUV\( envMap, ([^;]+) \)/g,
           'mix(textureCubeUV(envMap, $1), textureCubeUV(uSiteEnvironment, $1), uEnvironmentMix)'
         );
         shader.fragmentShader = 'uniform sampler2D uSiteEnvironment;\nuniform float uEnvironmentMix;\n' + shader.fragmentShader.replace('#include <envmap_physical_pars_fragment>', environmentChunk);
-        shader.fragmentShader = 'uniform sampler2D uIntroFrame;\nuniform float uIntroProjection;\nuniform vec2 uIntroResolution;\nuniform vec2 uIntroFit;\nuniform vec2 uIntroOffset;\n' + shader.fragmentShader.replace('#include <dithering_fragment>', `
+        shader.fragmentShader = 'varying vec4 vIntroClip;\nuniform sampler2D uIntroFrame;\nuniform float uIntroProjection;\nuniform vec2 uIntroResolution;\nuniform vec2 uIntroFit;\nuniform vec2 uIntroOffset;\n' + shader.fragmentShader.replace('#include <dithering_fragment>', `
           // Conserva los reflejos del último fotograma sobre la superficie real
           // durante el relevo; luego cede a la iluminación interactiva.
           if (uIntroProjection > 0.0) {
-            vec2 videoUv = (gl_FragCoord.xy / uIntroResolution - 0.5) * uIntroFit + 0.5 + uIntroOffset;
-            gl_FragColor.rgb = mix(gl_FragColor.rgb, pow(texture2D(uIntroFrame, videoUv).rgb, vec3(2.2)), uIntroProjection);
+            vec2 videoUv = (vIntroClip.xy / vIntroClip.w * 0.5) * uIntroFit + 0.5 + uIntroOffset;
+            vec3 videoColor = texture2D(uIntroFrame, videoUv).rgb;
+            gl_FragColor.rgb = mix(gl_FragColor.rgb, pow(videoColor, vec3(2.2)), uIntroProjection);
+            // El fondo horneado no debe volverse a tonemapear y formar parches
+            // oscuros sobre los huecos de la silueta: deja ver el fondo CSS.
+            float foreground = smoothstep(0.075, 0.12, max(videoColor.r, max(videoColor.g, videoColor.b)));
+            gl_FragColor.a *= mix(1.0, foreground, uIntroProjection);
           }
           #include <dithering_fragment>
         `);
