@@ -12,25 +12,25 @@
       "id": 1,
       "name": "ferrofluido",
       "file": "01-ferrofluido.mp3",
-      "about": "Humedo y metalico, escuela T2: burbujas, succion y cristalizacion."
+      "about": "Humedo y metalico, escuela T2: impacto blando, burbuja y cristalizacion."
     },
     {
       "id": 2,
       "name": "trailer",
       "file": "02-trailer.mp3",
-      "about": "Cine: subgrave, riser invertido, golpe en el relevo y floracion final."
+      "about": "Cine: tres impactos con cuerpo, estiramiento y floracion final."
     },
     {
       "id": 3,
       "name": "mercurio",
       "file": "03-mercurio.mp3",
-      "about": "Solo agua y mercurio: gotas, viscosidad, chapoteo y efervescencia."
+      "about": "Agua y mercurio: plops resonantes, viscosidad y efervescencia."
     },
     {
       "id": 4,
       "name": "analogico",
       "file": "04-analogico.mp3",
-      "about": "Sintetizador clasico: sierras detune, barrido resonante y arpegio."
+      "about": "Sintetizador: plucks resonantes, zap al solidificar y arpegio."
     },
     {
       "id": 5,
@@ -42,31 +42,31 @@
       "id": 6,
       "name": "fragua",
       "file": "06-fragua.mp3",
-      "about": "Industrial: retumbe, roce de metal, yunque y vapor."
+      "about": "Industrial: martillazos, retumbe, yunque y vapor."
     },
     {
       "id": 7,
       "name": "minimo",
       "file": "07-minimo.mp3",
-      "about": "Casi musica: un acorde que se completa. Lo mas discreto."
+      "about": "Casi musica: notas pulsadas y un acorde que se completa."
     },
     {
       "id": 8,
       "name": "granular",
       "file": "08-granular.mp3",
-      "about": "Glitch: granos, bitcrush y una rafaga de datos."
+      "about": "Glitch: rafagas de granos machacados y estallido de datos."
     },
     {
       "id": 9,
       "name": "aliento",
       "file": "09-aliento.mp3",
-      "about": "Humano: inspirar, contener y soltar, con pulso debajo."
+      "about": "Humano: tres inspiraciones, tension contenida y soltar."
     },
     {
       "id": 10,
       "name": "espacio",
       "file": "10-espacio.mp3",
-      "about": "Ambiente enorme: subgrave, paso doppler y un lavado que se evapora."
+      "about": "Ambiente enorme: pulsos lejanos con sala y un lavado que se evapora."
     }
   ]
 }

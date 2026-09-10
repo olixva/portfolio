@@ -170,13 +170,6 @@ def crush(x, bits=6, hold=8):
     return np.round(held * step) / step
 
 
-def converge(at, spread=0.85):
-    """Panoramica de las gotas: empiezan separadas y se juntan al centro justo
-    cuando el video las une. Son dos, y en estereo se tienen que oir como dos."""
-    k = min(1.0, max(0.0, at / (VIDEO * 0.82))) ** 1.6
-    return spread * (1 - k)
-
-
 class Mix:
     """Lienzo estereo. place() coloca un sonido en un instante y una posicion."""
 
@@ -209,386 +202,479 @@ class Mix:
         return out / peak * 0.72 if peak else out
 
 
+# --- Forma dramatica -----------------------------------------------------
+# La primera version se construyo como un riser: cama callada, subida, golpe.
+# Esa forma deja la apertura como lo mas flojo por definicion, y la apertura es
+# justo donde esta la imagen buena, las dos gotas buscandose. Aqui manda ella:
+# el relevo puntua y el verde cierra, pero ninguno la tapa.
+PROFILE = {'gotas': 0.0, 'rigido': -2.0, 'giro': -5.0, 'verde': -1.5}
+
+PHASES = [('gotas', 0, VIDEO), ('rigido', VIDEO, GOLD),
+          ('giro', GOLD, GREEN), ('verde', GREEN, END)]
+
+# Tres llamadas alternando lado: las gotas se responden, cada vez mas cerca y
+# mas agudas, hasta el estiramiento que las une. Son eventos con ataque, no una
+# textura de fondo: el oido se agarra a los transitorios, y sin ninguno la fase
+# se percibe vacia por mucho nivel que marque.
+CALLS = [(0.00, 1.00, -0.88), (0.52, 1.22, 0.82), (1.02, 1.52, -0.46)]
+
+
+def converge(at, spread=0.85):
+    """Panoramica del relleno de la apertura: lo que se siembra alrededor de
+    las tres llamadas tambien se cierra al centro segun el video une las gotas."""
+    k = min(1.0, max(0.0, at / (VIDEO * 0.82))) ** 1.6
+    return spread * (1 - k)
+
+
+def opening(m, g, drop, stretch=None, gain=1.0):
+    """Coloca la apertura. drop(gen, tono) devuelve el timbre de la variante y
+    stretch(gen) el del filamento; la estructura es comun a las diez."""
+    for at, pitch, pan in CALLS:
+        m.place(drop(g, pitch), at, gain, pan)
+    if stretch:
+        m.place(stretch(g), VIDEO - 0.66, gain * 0.85)
+
+
+def a_weighting(freqs):
+    """Ponderacion A (IEC 61672), en amplitud. Aproxima como oye el oido: casi
+    no cuenta lo que hay por debajo de 100 Hz."""
+    f2 = np.asarray(freqs, dtype=float) ** 2
+    num = (12194.0 ** 2) * f2 ** 2
+    den = ((f2 + 20.6 ** 2) * np.sqrt((f2 + 107.7 ** 2) * (f2 + 737.9 ** 2))
+           * (f2 + 12194.0 ** 2))
+    return 1.2589 * num / (den + 1e-30)
+
+
+def audible(stereo):
+    """Sonoridad percibida por fase. El nivel total engana: un subgrave enorme
+    lo sube sin que se oiga nada en un altavoz pequeno, y asi fue como se colo
+    una apertura practicamente muda. Una ventana fija de 300 Hz a 5 kHz tampoco
+    vale, porque ignora un grave que en cascos si pesa. La ponderacion A cubre
+    los dos casos con una sola medida."""
+    mono = stereo.mean(axis=0)
+    out = []
+    for _, a, b in PHASES:
+        seg = mono[secs(a):secs(b)]
+        spectrum = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2
+        weight = a_weighting(np.fft.rfftfreq(len(seg), 1 / SR)) ** 2
+        out.append(10 * np.log10(np.sum(spectrum * weight) / len(seg) + 1e-12))
+    return out
+
+
+def shape(stereo):
+    """Impone PROFILE. Mide cada fase en la banda audible y corrige hasta
+    cuadrar el perfil, en vez de confiar en que el balance salga solo de las
+    ganancias sueltas: eso es lo que fallaba, y fase a fase no se veia."""
+    levels = audible(stereo)
+    targets = [PROFILE[name] for name, _, _ in PHASES]
+    # Media cero: se reparte el peso, no se sube el conjunto.
+    offset = float(np.mean(levels) - np.mean(targets))
+    gains = np.ones(N)
+    for (name, a, b), level, target in zip(PHASES, levels, targets):
+        correction = np.clip(target + offset - level, -9.0, 9.0)
+        gains[secs(a):secs(b)] = 10 ** (correction / 20)
+    gains[secs(END):] = gains[secs(END) - 1]
+    # Suavizado de 0.2 s: sin el, el salto entre fases se oye como un escalon.
+    window = np.hanning(secs(0.2))
+    gains = np.convolve(gains, window / window.sum(), mode='same')
+    return stereo * gains
+
+
 # --- Variantes -----------------------------------------------------------
-# Cada una recorre los cuatro tiempos: gotas, solidificar, giro, verde.
+# Todas comparten la forma; lo que cambia es el timbre de cada golpe.
 
 def v_ferrofluido(g):
-    """T2: humedo + metal + succion. Granular y organico."""
+    """T2: humedo y metalico. La gota es un impacto blando con cola de burbuja."""
     m = Mix()
-    n = secs(VIDEO)
-    m.place(band(noise(n, g, 'pink'), 30, 90) * ramp(n, 0.2, 1.0), 0, 0.4)
-    # Arrastre: limaduras moviendose. Es el cuerpo audible de las gotas, en la
-    # banda que si sale por un altavoz pequeno.
-    for side in (-1, 1):
-        crawl = band(noise(n, g, 'pink'), 700, 4500)
-        crawl *= 0.45 + 0.55 * (0.5 + 0.5 * np.sin(np.linspace(0, 22 + 7 * side, n)))
-        m.place(sweep_band(crawl, 1100 + 600 * np.sin(np.linspace(side, 9 * side, n)),
-                           'bandpass', 2) * ramp(n, 0.4, 1.0), 0, 0.5, 0.8 * side)
-    for i in range(58):
-        at = g.uniform(0, VIDEO * 0.92)
-        d = secs(g.uniform(0.04, 0.13))
-        f0 = g.uniform(260, 900)
-        m.place(bubble(d, f0, f0 * g.uniform(2.5, 5.5), g), at,
-                g.uniform(0.12, 0.3), converge(at) * g.choice([-1, 1]))
-    # Succion: las gotas se estiran una hacia otra en el ultimo tercio.
+
+    def drop(gen, pitch):
+        n = secs(0.55)
+        body = metal(n, 210 * pitch, [1, 2.31, 3.74, 5.9], [.28, .2, .13, .08], gen, .01)
+        wet = band(noise(n, gen), 500, 4200) * env(n, 0.004, 0, curve=2.6)
+        tail = bubble(secs(0.14), 150 * pitch, 620 * pitch, gen)
+        out = body * env(n, 0.003, 0, curve=1.9) + wet * 0.7
+        out[:len(tail)] += tail * 0.5
+        return out
+
+    def stretch(gen):
+        n = secs(0.66)
+        pull = band(noise(n, gen, 'pink'), 300, 3800) * ramp(n, 0.15, 1.0, 2.0)
+        return sweep_band(pull, ramp(n, 600, 3400, 1.6), 'lowpass') \
+            + sine(ramp(n, 200, 92, 0.8), n) * ramp(n, 0.2, 1.0) * 0.5
+
+    opening(m, g, drop, stretch, 0.9)
+    m.place(band(noise(secs(VIDEO), g, 'pink'), 30, 90) * ramp(secs(VIDEO), 0.2, 1.0), 0, 0.3)
+    # Relevo: cristaliza. Crepitar corto y el cuerpo metalico asentandose.
     n = secs(1.0)
-    pull = band(noise(n, g, 'pink'), 180, 2600) * ramp(n, 0.05, 1.0, 2.2)
-    m.place(sweep_band(pull, ramp(n, 400, 3200, 2.0), 'lowpass'), VIDEO - 1.0, 0.5)
-    m.place(sine(ramp(n, 70, 34, 0.6), n) * ramp(n, 0.2, 1.0), VIDEO - 1.0, 0.3)
-    # Solidificar: crepitar cristalizando y el cuerpo metalico entrando.
-    n = secs(1.1)
-    grit = noise(n, g) * (g.random(n) > 0.988) * ramp(n, 1.0, 0.05, 0.7)
-    m.place(band(grit, 900, 7000) * 3.2, HANDOFF - 0.35, 0.4)
-    m.place(metal(secs(2.4), 148, [1, 2.37, 3.61, 5.12, 7.44], [1.5, 1.1, .8, .55, .35], g, .004),
-            HANDOFF, 0.5)
-    m.place(band(noise(secs(0.35), g), 40, 220) * env(secs(0.35), 0.002, 0), HANDOFF, 0.7)
-    # Giro: un roce de aire corto.
+    grit = noise(n, g) * (g.random(n) > 0.985) * ramp(n, 1.0, 0.05, 0.7)
+    m.place(band(grit, 900, 6000) * 3.0, HANDOFF - 0.3, 0.45)
+    m.place(metal(secs(2.0), 148, [1, 2.37, 3.61, 5.12], [1.2, .9, .6, .4], g, .004),
+            HANDOFF, 0.4)
     n = secs(0.55)
-    m.place(sweep_band(band(noise(n, g, 'pink'), 500, 9000), ramp(n, 1400, 5200), 'bandpass', 2)
+    m.place(sweep_band(band(noise(n, g, 'pink'), 500, 7000), ramp(n, 1400, 4200), 'bandpass', 2)
             * env(n, 0.15, 0, curve=1.4), GOLD, 0.3, -0.4)
     # Verde: el enjambre se desprende y se disuelve.
     n = secs(1.35)
-    shimmer = noise(n, g) * (g.random(n) > 0.972)
-    m.place(band(shimmer, 2600, 12000) * 3.0 * np.exp(-np.linspace(0, 3.4, n)), GREEN, 0.36)
+    shimmer = noise(n, g) * (g.random(n) > 0.968)
+    m.place(band(shimmer, 1800, 9000) * 3.0 * np.exp(-np.linspace(0, 3.2, n)), GREEN, 0.5)
     m.place(metal(n, 296, [1, 1.51, 2.42, 3.9], [.9, .7, .5, .35], g) * ramp(n, 1, 0, 1.4),
-            GREEN, 0.22, 0.5)
-    return reverb(m.stereo(), 1.3, g, 5200, 0.3)
+            GREEN, 0.3, 0.5)
+    return reverb(m.stereo(), 1.2, g, 5200, 0.28)
 
 
 def v_trailer(g):
-    """Cine: subgrave, riser invertido, golpe y floracion."""
+    """Cine. La gota es un impacto con cuerpo, no un riser que llega tarde."""
     m = Mix()
-    n = secs(HANDOFF)
-    m.place(sine(ramp(n, 28, 44, 1.4), n) * ramp(n, 0.3, 1.0, 1.7), 0, 0.8)
-    # Riser: ruido subiendo de banda hasta el golpe.
-    riser = band(noise(n, g, 'pink'), 200, 14000) * ramp(n, 0.12, 1.0, 1.4)
-    m.place(sweep_band(riser, ramp(n, 300, 9000, 1.6), 'highpass', 2), 0, 0.5)
-    m.place(sine(ramp(n, 180, 900, 3.0), n) * ramp(n, 0.0, 0.5, 3.5), 0, 0.3, 0.3)
-    # Pulso de las dos gotas: golpes graves con cuerpo medio, acercandose.
-    at, gap = 0.05, 0.42
-    while at < VIDEO - 0.1:
-        d = secs(0.5)
-        hit = metal(d, 165, [1, 2.4, 4.1], [.35, .22, .14], g, .01)
-        m.place(hit * env(d, 0.003, 0, curve=2.0), at, 0.34, converge(at))
-        m.place(sine(ramp(d, 110, 55, 0.5), d) * env(d, 0.002, 0, curve=1.6), at, 0.3)
-        at += gap
-        gap *= 0.82
-    # Golpe en el relevo, con cuerpo grave y cola metalica.
-    n = secs(2.2)
-    m.place(sine(ramp(n, 92, 32, 0.35), n) * env(n, 0.001, 0, curve=1.6), HANDOFF, 0.95)
-    m.place(metal(n, 116, [1, 2.71, 4.13, 6.3], [1.8, 1.2, .8, .5], g, .006), HANDOFF, 0.45)
-    m.place(band(noise(secs(0.5), g), 300, 9000) * env(secs(0.5), 0.001, 0, curve=2.2),
-            HANDOFF, 0.4)
-    # Giro y floracion verde.
+
+    def drop(gen, pitch):
+        n = secs(0.7)
+        hit = metal(n, 165 * pitch, [1, 2.02, 3.4, 5.1], [.4, .28, .18, .11], gen, .008)
+        air = band(noise(n, gen, 'pink'), 400, 6000) * env(n, 0.002, 0, curve=2.8)
+        low = sine(ramp(n, 130 * pitch, 52, 0.45), n) * env(n, 0.002, 0, curve=1.5)
+        return hit * env(n, 0.002, 0, curve=1.6) + air * 0.55 + low * 0.7
+
+    def stretch(gen):
+        n = secs(0.66)
+        riser = band(noise(n, gen, 'pink'), 300, 12000) * ramp(n, 0.2, 1.0, 1.3)
+        return sweep_band(riser, ramp(n, 700, 6000, 1.4), 'highpass', 2) \
+            + sine(ramp(n, 300, 1100, 2.2), n) * ramp(n, 0.0, 0.6, 2.6)
+
+    opening(m, g, drop, stretch, 0.95)
+    m.place(sine(ramp(secs(HANDOFF), 28, 44, 1.4), secs(HANDOFF))
+            * ramp(secs(HANDOFF), 0.3, 1.0, 1.7), 0, 0.45)
+    # Relevo: el golpe puntua, ya no aplasta a la apertura.
+    n = secs(2.0)
+    m.place(sine(ramp(n, 92, 32, 0.35), n) * env(n, 0.001, 0, curve=1.6), HANDOFF, 0.55)
+    m.place(metal(n, 116, [1, 2.71, 4.13, 6.3], [1.5, 1.0, .7, .45], g, .006), HANDOFF, 0.35)
     n = secs(0.55)
-    m.place(sweep_band(band(noise(n, g, 'pink'), 400, 10000), ramp(n, 900, 6000), 'bandpass', 2)
-            * env(n, 0.2, 0, curve=1.2), GOLD, 0.28, 0.45)
+    m.place(sweep_band(band(noise(n, g, 'pink'), 400, 8000), ramp(n, 900, 5000), 'bandpass', 2)
+            * env(n, 0.2, 0, curve=1.2), GOLD, 0.3, 0.45)
     n = secs(1.35)
-    chord = sum(sine(f, n) for f in (110, 165, 220, 330, 440))
-    m.place(chord / 5 * ramp(n, 0.0, 1.0, 0.35) * np.exp(-np.linspace(0, 2.6, n)), GREEN, 0.55)
-    m.place(band(noise(n, g, 'pink'), 3000, 13000) * np.exp(-np.linspace(0, 4.0, n)), GREEN, 0.3)
-    return reverb(m.stereo(), 1.8, g, 7000, 0.4)
+    chord = sum(sine(f, n) for f in (220, 330, 440, 660))
+    m.place(chord / 4 * ramp(n, 0.0, 1.0, 0.35) * np.exp(-np.linspace(0, 2.6, n)), GREEN, 0.5)
+    m.place(band(noise(n, g, 'pink'), 2000, 9000) * np.exp(-np.linspace(0, 3.4, n)), GREEN, 0.35)
+    return reverb(m.stereo(), 1.6, g, 7000, 0.36)
 
 
 def v_mercurio(g):
-    """Agua y mercurio: gotas, viscosidad, chapoteo. Nada de sintetizador."""
+    """Agua y mercurio. La gota es una gota: plop con cuerpo resonante."""
     m = Mix()
-    for i in range(96):
-        at = g.uniform(0, VIDEO)
-        d = secs(g.uniform(0.03, 0.1))
-        f0 = g.uniform(240, 900)
-        m.place(bubble(d, f0, f0 * g.uniform(3, 7), g, 2.2), at,
-                g.uniform(0.12, 0.32), converge(at) * g.choice([-1, 1]))
-    n = secs(1.2)
-    m.place(band(noise(n, g, 'pink'), 60, 500) * ramp(n, 0.15, 1.0, 1.8), VIDEO - 1.2, 0.45)
-    # Sorbo: viscosidad estirandose antes de la union.
-    n = secs(0.8)
-    slurp = band(noise(n, g, 'pink'), 200, 3000) * ramp(n, 0.1, 1.0, 2.5)
-    m.place(sweep_band(slurp, ramp(n, 250, 2400, 1.6), 'lowpass'), VIDEO - 0.8, 0.55)
-    m.place(sine(ramp(n, 220, 96, 1.2), n) * ramp(n, 0.3, 1.0), VIDEO - 0.8, 0.25)
-    # Chapoteo que cuaja.
-    n = secs(0.9)
-    m.place(band(noise(n, g), 400, 6000) * env(n, 0.004, 0, curve=2.4), HANDOFF, 0.5)
-    m.place(sine(ramp(n, 150, 60, 0.5), n) * env(n, 0.002, 0, curve=1.4), HANDOFF, 0.5)
-    for i in range(22):
+
+    def drop(gen, pitch):
+        n = secs(0.42)
+        plop = bubble(secs(0.11), 260 * pitch, 1500 * pitch, gen, 2.0)
+        body = sine(np.full(n, 430.0 * pitch), n) * env(n, 0.004, 0, curve=2.4)
+        splash = band(noise(n, gen), 700, 5500) * env(n, 0.002, 0, curve=3.0)
+        out = body * 0.55 + splash * 0.8
+        out[:len(plop)] += plop * 1.1
+        return out
+
+    def stretch(gen):
+        n = secs(0.66)
+        slurp = band(noise(n, gen, 'pink'), 300, 3600) * ramp(n, 0.15, 1.0, 2.2)
+        return sweep_band(slurp, ramp(n, 450, 2800, 1.5), 'lowpass') \
+            + sine(ramp(n, 380, 140, 1.1), n) * ramp(n, 0.3, 1.0) * 0.6
+
+    opening(m, g, drop, stretch, 1.0)
+    for i in range(40):
+        at = g.uniform(0, VIDEO * 0.95)
         d = secs(g.uniform(0.02, 0.07))
-        f0 = g.uniform(300, 900)
-        m.place(bubble(d, f0, f0 * 4, g), HANDOFF + g.uniform(0, 0.7),
-                g.uniform(0.05, 0.14), g.uniform(-0.8, 0.8))
+        f0 = g.uniform(320, 1100)
+        m.place(bubble(d, f0, f0 * g.uniform(3, 6), g, 2.2), at,
+                g.uniform(0.08, 0.2), converge(at) * g.choice([-1, 1]))
+    n = secs(0.9)
+    m.place(band(noise(n, g), 400, 5000) * env(n, 0.004, 0, curve=2.4), HANDOFF, 0.45)
+    m.place(sine(ramp(n, 150, 60, 0.5), n) * env(n, 0.002, 0, curve=1.4), HANDOFF, 0.4)
     n = secs(0.55)
-    m.place(band(noise(n, g, 'pink'), 800, 5000) * env(n, 0.18, 0, curve=1.5), GOLD, 0.5)
-    for i in range(10):
-        d = secs(g.uniform(0.02, 0.06))
-        f0 = g.uniform(400, 1100)
-        m.place(bubble(d, f0, f0 * 3.5, g), GOLD + g.uniform(0, 0.45),
-                g.uniform(0.08, 0.18), g.uniform(-0.8, 0.8))
-    # Verde: efervescencia que se evapora.
+    m.place(band(noise(n, g, 'pink'), 800, 5000) * env(n, 0.18, 0, curve=1.5), GOLD, 0.4)
     n = secs(1.35)
-    fizz = noise(n, g) * (g.random(n) > 0.955)
-    m.place(band(fizz, 1800, 11000) * 2.6 * np.exp(-np.linspace(0, 3.0, n)), GREEN, 0.85)
-    for i in range(30):
+    fizz = noise(n, g) * (g.random(n) > 0.95)
+    m.place(band(fizz, 1200, 8000) * 2.6 * np.exp(-np.linspace(0, 3.0, n)), GREEN, 0.8)
+    for i in range(26):
         d = secs(g.uniform(0.015, 0.05))
         f0 = g.uniform(600, 1800)
         m.place(bubble(d, f0, f0 * 3, g), GREEN + g.uniform(0, 1.1) ** 1.6,
-                g.uniform(0.04, 0.1), g.uniform(-0.9, 0.9))
-    return reverb(m.stereo(), 1.0, g, 6000, 0.25)
+                g.uniform(0.06, 0.14), g.uniform(-0.9, 0.9))
+    return reverb(m.stereo(), 0.9, g, 6000, 0.24)
 
 
 def v_analogico(g):
-    """Sintetizador clasico: sierras detune, barrido resonante, zap."""
+    """Sintetizador. La gota es un pluck resonante, no un pad inaudible."""
     m = Mix()
-    n = secs(HANDOFF)
-    pad = saw(np.full(n, 110.0), n) + saw(np.full(n, 110.8), n) + saw(np.full(n, 165.0), n)
-    pad *= ramp(n, 0.25, 1.0, 1.5)
-    # El filtro abre desde el principio: cerrado en 180 Hz no salia del subgrave.
-    m.place(sweep_band(pad / 3, ramp(n, 700, 4200, 1.3), 'lowpass', 6), 0, 0.55)
-    m.place(sine(np.full(n, 27.5), n) * ramp(n, 0.4, 1.0), 0, 0.3)
-    # Dos osciladores que laten y se juntan: las gotas buscandose.
-    for side in (-1, 1):
-        blip = saw(np.full(n, 220.0 if side > 0 else 293.66), n)
-        blip *= (0.5 + 0.5 * np.sin(np.linspace(0, 26 + 6 * side, n))) ** 3
-        pan = np.array([converge(i / SR) for i in range(0, n, 2048)]).mean()
-        m.place(band(blip, 300, 5000) * ramp(n, 0.3, 1.0), 0, 0.3, pan * side)
-    # Zap al solidificar: barrido resonante que se cierra de golpe.
-    n = secs(1.4)
+
+    def drop(gen, pitch):
+        n = secs(0.6)
+        pluck = saw(np.full(n, 220.0 * pitch), n) * env(n, 0.003, 0, curve=2.0)
+        return sweep_band(pluck, ramp(n, 4200, 500, 0.6), 'lowpass', 6) \
+            + sine(np.full(n, 110.0 * pitch), n) * env(n, 0.002, 0, curve=1.6) * 0.5
+
+    def stretch(gen):
+        n = secs(0.66)
+        return sweep_band(saw(ramp(n, 110, 330, 1.6), n) * ramp(n, 0.3, 1.0),
+                          ramp(n, 600, 5200, 1.2), 'lowpass', 6)
+
+    opening(m, g, drop, stretch, 0.95)
+    m.place(sine(np.full(secs(HANDOFF), 55.0), secs(HANDOFF))
+            * ramp(secs(HANDOFF), 0.4, 1.0), 0, 0.3)
+    n = secs(1.3)
     zap = saw(ramp(n, 440, 110, 0.4), n) * env(n, 0.002, 0, curve=1.8)
-    m.place(sweep_band(zap, ramp(n, 5200, 300, 0.5), 'lowpass', 6), HANDOFF, 0.38)
-    m.place(sine(ramp(n, 110, 41, 0.35), n) * env(n, 0.001, 0, curve=1.5), HANDOFF, 0.42)
-    # Giro: portamento corto.
+    m.place(sweep_band(zap, ramp(n, 5200, 400, 0.5), 'lowpass', 6), HANDOFF, 0.42)
+    m.place(sine(ramp(n, 110, 41, 0.35), n) * env(n, 0.001, 0, curve=1.5), HANDOFF, 0.38)
     n = secs(0.55)
-    glide = saw(ramp(n, 330, 495, 1.0), n) * env(n, 0.1, 0, curve=1.6)
-    m.place(band(glide, 300, 6000), GOLD, 1.0, -0.35)
-    m.place(band(saw(ramp(n, 660, 990, 1.0), n) * env(n, 0.12, 0, curve=1.4), 400, 7000),
-            GOLD, 0.45, 0.4)
-    # Verde: arpegio que se abre y se apaga.
+    m.place(band(saw(ramp(n, 330, 495, 1.0), n) * env(n, 0.1, 0, curve=1.6), 300, 6000),
+            GOLD, 0.55, -0.35)
     step = secs(0.135)
-    for i, f in enumerate([220, 330, 440, 550, 660, 880, 1100, 1320]):
+    for i, f in enumerate([330, 440, 550, 660, 880, 1100, 1320]):
         d = secs(0.5)
         voice = saw(np.full(d, float(f)), d) * env(d, 0.004, 0, curve=2.6)
         m.place(band(voice, hi=7000), GREEN + i * step / SR,
-                0.62 * (1 - i / 9), (i / 7) * 1.4 - 0.7)
-    return reverb(m.stereo(), 1.4, g, 6500, 0.3)
+                0.5 * (1 - i / 8), (i / 6) * 1.4 - 0.7)
+    return reverb(m.stereo(), 1.3, g, 6500, 0.28)
 
 
 def v_cristal(g):
-    """Cristal: parciales vidriosos, casi musical, muy limpio."""
+    """Vidrio. La gota es un golpe de campana limpio."""
     m = Mix()
-    n = secs(VIDEO)
-    m.place(sine(np.full(n, 65.4), n) * ramp(n, 0.3, 1.0, 1.4), 0, 0.35)
-    for i in range(18):
-        d = secs(g.uniform(0.5, 1.3))
-        base = g.choice([523.25, 659.25, 784.0, 987.77, 1174.66])
-        m.place(metal(d, base, [1, 2.02, 3.05], [.8, .5, .3], g, .002)
-                * env(d, 0.006, 0, curve=2.2), g.uniform(0, VIDEO * 0.9),
-                g.uniform(0.07, 0.18), g.uniform(-0.9, 0.9))
-    # Solidificar: racimo de campanas a la vez.
-    n = secs(2.6)
-    for f, pan in [(261.6, -0.6), (392.0, 0.0), (523.25, 0.55), (784.0, -0.3)]:
-        m.place(metal(n, f, [1, 2.41, 4.07, 6.8], [2.0, 1.3, .8, .5], g, .003), HANDOFF, 0.3, pan)
-    m.place(sine(ramp(n, 130, 65, 0.4), n) * env(n, 0.002, 0, curve=1.3), HANDOFF, 0.45)
+
+    def drop(gen, pitch):
+        n = secs(1.1)
+        base = 523.25 * pitch
+        bell = metal(n, base, [1, 2.02, 3.05, 4.8], [.8, .55, .35, .2], gen, .002)
+        # El golpe del badajo: sin ese chasquido corto la campana no arranca,
+        # entra sola y se pierde entre lo demas.
+        strike = band(noise(secs(0.04), gen), 2500, 10000) * env(secs(0.04), 0.0005, 0)
+        out = bell * env(n, 0.004, 0, curve=2.0)
+        out[:len(strike)] += strike * 0.5
+        return out
+
+    def stretch(gen):
+        n = secs(0.66)
+        glide = sum(sine(ramp(n, f, f * 1.5, 1.4), n) for f in (392.0, 587.3))
+        return glide / 2 * ramp(n, 0.2, 1.0, 1.2)
+
+    opening(m, g, drop, stretch, 0.95)
+    m.place(sine(np.full(secs(VIDEO), 65.4), secs(VIDEO))
+            * ramp(secs(VIDEO), 0.3, 1.0), 0, 0.22)
+    n = secs(2.2)
+    for f, pan in [(261.6, -0.6), (392.0, 0.0), (523.25, 0.55)]:
+        m.place(metal(n, f, [1, 2.41, 4.07, 6.8], [1.8, 1.2, .7, .45], g, .003), HANDOFF, 0.26, pan)
+    m.place(sine(ramp(n, 130, 65, 0.4), n) * env(n, 0.002, 0, curve=1.3), HANDOFF, 0.35)
     n = secs(0.55)
-    m.place(band(noise(n, g), 4000, 14000) * env(n, 0.2, 0, curve=1.3), GOLD, 0.16)
-    # Verde: purpurina que asciende y desaparece.
+    m.place(band(noise(n, g), 3000, 12000) * env(n, 0.2, 0, curve=1.3), GOLD, 0.2)
     n = secs(1.35)
-    for i in range(34):
+    for i in range(30):
         d = secs(g.uniform(0.2, 0.6))
-        f = g.uniform(1200, 5200)
+        f = g.uniform(900, 4200)
         m.place(metal(d, f, [1, 2.1], [.4, .25], g) * env(d, 0.003, 0, curve=2.8),
-                GREEN + g.uniform(0, 1.0) ** 1.4, g.uniform(0.05, 0.13), g.uniform(-1, 1))
+                GREEN + g.uniform(0, 1.0) ** 1.4, g.uniform(0.06, 0.15), g.uniform(-1, 1))
     chord = sum(sine(f, n) for f in (523.25, 659.25, 784.0))
-    m.place(chord / 3 * ramp(n, 0.0, 1.0, 0.4) * np.exp(-np.linspace(0, 3.2, n)), GREEN, 0.3)
-    return reverb(m.stereo(), 1.5, g, 9000, 0.34)
+    m.place(chord / 3 * ramp(n, 0.0, 1.0, 0.4) * np.exp(-np.linspace(0, 3.2, n)), GREEN, 0.32)
+    return reverb(m.stereo(), 1.5, g, 9000, 0.32)
 
 
 def v_fragua(g):
-    """Industrial: retumbe, roce de metal, yunque y vapor."""
+    """Fragua. La gota es un martillazo corto sobre metal."""
     m = Mix()
-    n = secs(HANDOFF)
-    m.place(band(noise(n, g, 'brown'), 25, 120) * ramp(n, 0.4, 1.0), 0, 0.55)
-    # Roce: ruido de banda estrecha resonando, moviendose.
-    n = secs(VIDEO)
-    scrape = band(noise(n, g, 'pink'), 700, 4200)
-    m.place(sweep_band(scrape, 1200 + 700 * np.sin(np.linspace(0, 9, n)), 'bandpass', 3)
-            * ramp(n, 0.2, 1.0, 1.2), 0, 0.45, -0.3)
-    m.place(sweep_band(band(noise(n, g, 'pink'), 700, 4200),
-                       1600 + 900 * np.sin(np.linspace(2, 11, n)), 'bandpass', 3)
-            * ramp(n, 0.15, 0.9, 1.4), 0, 0.35, 0.4)
-    # Yunque.
-    n = secs(2.0)
-    m.place(metal(n, 92, [1, 2.13, 3.77, 5.9, 8.4], [1.6, 1.0, .7, .45, .3], g, .008),
-            HANDOFF, 0.6)
+
+    def drop(gen, pitch):
+        n = secs(0.8)
+        anvil = metal(n, 190 * pitch, [1, 2.13, 3.77, 5.9, 8.4], [.5, .34, .22, .14, .09],
+                      gen, .012)
+        tap = drive(band(noise(secs(0.09), gen), 1200, 7000) * env(secs(0.09), 0.0004, 0), 3)
+        out = anvil * env(n, 0.002, 0, curve=1.5)
+        out[:len(tap)] += tap * 0.6
+        return out
+
+    def stretch(gen):
+        n = secs(0.66)
+        scrape = band(noise(n, gen, 'pink'), 600, 4500)
+        return sweep_band(scrape, ramp(n, 900, 3200, 1.2), 'bandpass', 3) * ramp(n, 0.25, 1.0)
+
+    opening(m, g, drop, stretch, 0.9)
+    m.place(band(noise(secs(HANDOFF), g, 'brown'), 25, 120)
+            * ramp(secs(HANDOFF), 0.4, 1.0), 0, 0.4)
+    n = secs(1.8)
+    m.place(metal(n, 92, [1, 2.13, 3.77, 5.9], [1.4, .9, .6, .4], g, .008), HANDOFF, 0.45)
     m.place(band(noise(secs(0.3), g), 60, 400) * env(secs(0.3), 0.001, 0, curve=1.4),
-            HANDOFF, 0.7)
-    m.place(drive(band(noise(secs(0.12), g), 1500, 9000) * env(secs(0.12), 0.0005, 0), 3),
-            HANDOFF, 0.35)
+            HANDOFF, 0.5)
     n = secs(0.55)
-    m.place(band(noise(n, g, 'pink'), 300, 3000) * env(n, 0.12, 0, curve=1.6), GOLD, 0.3, 0.35)
-    # Verde: vapor que se libera y se agota.
+    m.place(band(noise(n, g, 'pink'), 300, 3000) * env(n, 0.12, 0, curve=1.6), GOLD, 0.35, 0.35)
     n = secs(1.35)
     steam = band(noise(n, g, 'pink'), 600, 6000)
     m.place(sweep_band(steam, ramp(n, 900, 3400, 0.6), 'bandpass', 2)
-            * ramp(n, 0.0, 1.0, 0.25) * np.exp(-np.linspace(0, 2.8, n)), GREEN, 1.5)
-    m.place(band(noise(n, g, 'pink'), 2500, 9000)
-            * ramp(n, 0.0, 1.0, 0.3) * np.exp(-np.linspace(0, 3.2, n)), GREEN, 0.5)
-    m.place(sine(ramp(n, 60, 38, 0.7), n) * np.exp(-np.linspace(0, 3.0, n)), GREEN, 0.3)
-    return reverb(m.stereo(), 1.6, g, 4500, 0.32)
+            * ramp(n, 0.0, 1.0, 0.25) * np.exp(-np.linspace(0, 2.8, n)), GREEN, 1.1)
+    m.place(sine(ramp(n, 60, 38, 0.7), n) * np.exp(-np.linspace(0, 3.0, n)), GREEN, 0.25)
+    return reverb(m.stereo(), 1.4, g, 4500, 0.3)
 
 
 def v_minimo(g):
-    """Casi musica: un acorde que se completa. Sin efectos, muy discreto."""
+    """Casi musica. La gota es una nota pulsada: discreta pero presente."""
     m = Mix()
 
-    def voice(f, at, dur, gain, pan=0.0, attack=0.35):
-        n = secs(dur)
-        tone = sine(np.full(n, float(f)), n) + 0.28 * sine(np.full(n, float(f) * 2), n)
-        shape = np.minimum(ramp(n, 0, 1, 1.0) / max(attack / dur, 1e-3), 1.0)
-        m.place(band(tone, hi=6000) * shape * np.exp(-np.linspace(0, 1.4, n)), at, gain, pan)
+    def drop(gen, pitch):
+        n = secs(1.2)
+        f = 220.0 * pitch
+        tone = sine(np.full(n, f), n) + 0.4 * sine(np.full(n, f * 2), n) \
+            + 0.16 * sine(np.full(n, f * 3), n)
+        return tone / 1.6 * env(n, 0.02, 0, curve=1.1)
 
-    voice(110, 0.0, HANDOFF, 0.5, 0.0, 0.9)             # gotas: la fundamental
-    # La fundamental sola no sale de un altavoz pequeno: las dos octavas de
-    # arriba, en tremolo lento y a un lado cada una, la hacen audible sin
-    # romper lo discreto.
-    for side, f in ((-1, 220.0), (1, 440.0)):
-        n = secs(VIDEO + 0.4)
-        tone = sine(np.full(n, f), n) * (0.55 + 0.45 * np.sin(np.linspace(0, 9 * -side, n)))
-        pan = np.array([converge(i / SR) for i in range(0, n, 2048)]).mean() * side
-        m.place(tone * ramp(n, 0.2, 1.0, 0.7) * np.exp(-np.linspace(0, 0.9, n)),
-                0, 0.2 if f > 300 else 0.26, pan)
-    voice(164.81, HANDOFF, END - HANDOFF + 0.4, 0.36, -0.5)   # solidificar: quinta
-    voice(659.25, HANDOFF, 1.1, 0.3, 0.35, 0.02)              # su octava, ya audible
-    voice(494, HANDOFF + 0.05, 1.0, 0.22, -0.3, 0.02)
-    voice(220, GOLD, END - GOLD + 0.4, 0.3, 0.5)        # giro: octava
-    voice(277.18, GREEN, 1.5, 0.28, -0.25, 0.15)        # verde: tercera, resuelve
-    voice(329.63, GREEN + 0.09, 1.4, 0.24, 0.3, 0.15)
-    voice(440, GREEN + 0.18, 1.3, 0.18, 0.0, 0.15)
+    def stretch(gen):
+        n = secs(0.66)
+        return (sine(ramp(n, 220, 330, 1.3), n) + 0.4 * sine(ramp(n, 440, 660, 1.3), n)) \
+            * ramp(n, 0.25, 1.0, 0.9) * 0.7
+
+    opening(m, g, drop, stretch, 0.85)
+    m.place(sine(np.full(secs(HANDOFF), 110.0), secs(HANDOFF))
+            * ramp(secs(HANDOFF), 0.4, 1.0) * np.exp(-np.linspace(0, 0.8, secs(HANDOFF))),
+            0, 0.35)
+
+    def voice(f, at, dur, gain, pan=0.0, attack=0.2):
+        n = secs(dur)
+        tone = sine(np.full(n, float(f)), n) + 0.32 * sine(np.full(n, float(f) * 2), n)
+        curve = np.minimum(ramp(n, 0, 1, 1.0) / max(attack / dur, 1e-3), 1.0)
+        m.place(band(tone, hi=6000) * curve * np.exp(-np.linspace(0, 1.6, n)), at, gain, pan)
+
+    voice(329.63, HANDOFF, 1.4, 0.34, -0.45)      # solidificar: la quinta
+    voice(440, GOLD, 1.2, 0.3, 0.5)               # giro: la octava
+    voice(554.37, GREEN, 1.3, 0.34, -0.25, 0.06)  # verde: resuelve
+    voice(659.25, GREEN + 0.09, 1.2, 0.3, 0.3, 0.06)
+    voice(880, GREEN + 0.18, 1.1, 0.22, 0.0, 0.06)
     n = secs(0.9)
-    m.place(band(noise(n, g, 'pink'), 2000, 9000)
-            * ramp(n, 0.0, 1.0, 0.3) * np.exp(-np.linspace(0, 3.4, n)), GREEN, 0.12)
-    return reverb(m.stereo(), 1.6, g, 7000, 0.34)
+    m.place(band(noise(n, g, 'pink'), 1500, 8000)
+            * ramp(n, 0.0, 1.0, 0.3) * np.exp(-np.linspace(0, 3.4, n)), GREEN, 0.16)
+    return reverb(m.stereo(), 1.4, g, 7000, 0.3)
 
 
 def v_granular(g):
-    """Glitch: granos, bitcrush y un estallido de datos."""
+    """Glitch. La gota es una rafaga corta de granos machacados."""
     m = Mix()
-    n = secs(VIDEO)
-    for i in range(320):
-        d = secs(g.uniform(0.008, 0.045))
-        f = g.uniform(400, 3600)
-        at = g.uniform(0, VIDEO * 0.95)
-        grain = sine(np.full(d, f), d) * env(d, 0.001, 0, curve=2.0)
-        m.place(crush(grain, 4, 6), at, g.uniform(0.12, 0.3), converge(at) * g.choice([-1, 1]))
-    m.place(sine(ramp(n, 40, 55, 1.0), n) * ramp(n, 0.3, 1.0), 0, 0.45)
-    # Solidificar: el flujo se congela en un tono estable.
-    n = secs(1.6)
+
+    def drop(gen, pitch):
+        n = secs(0.5)
+        out = np.zeros(n)
+        for i in range(26):
+            d = secs(gen.uniform(0.006, 0.03))
+            at = int(gen.uniform(0, n - d) ** 1.0)
+            f = gen.uniform(500, 3200) * pitch
+            grain = crush(sine(np.full(d, f), d) * env(d, 0.001, 0, curve=2.0), 3, 4)
+            out[at:at + d] += grain * gen.uniform(0.4, 1.0)
+        return out * np.exp(-np.linspace(0, 2.2, n))
+
+    def stretch(gen):
+        n = secs(0.66)
+        stut = noise(n, gen) * (np.arange(n) // secs(0.015) % 2)
+        return crush(band(stut, 600, 7000), 4, 5) * ramp(n, 0.2, 1.0, 1.4)
+
+    opening(m, g, drop, stretch, 0.95)
+    m.place(sine(ramp(secs(VIDEO), 40, 55, 1.0), secs(VIDEO))
+            * ramp(secs(VIDEO), 0.3, 1.0), 0, 0.3)
+    n = secs(1.5)
     freeze = crush(saw(ramp(n, 900, 220, 0.3), n), 5, 12) * env(n, 0.001, 0, curve=1.8)
-    m.place(band(freeze, hi=8000), HANDOFF, 0.45)
-    m.place(sine(ramp(n, 120, 45, 0.4), n) * env(n, 0.001, 0, curve=1.4), HANDOFF, 0.55)
+    m.place(band(freeze, hi=8000), HANDOFF, 0.4)
+    m.place(sine(ramp(n, 120, 45, 0.4), n) * env(n, 0.001, 0, curve=1.4), HANDOFF, 0.42)
     n = secs(0.55)
     stutter = noise(n, g) * (np.arange(n) // secs(0.02) % 2)
-    m.place(band(stutter, 800, 6000) * env(n, 0.05, 0, curve=0.9), GOLD, 1.6, 0.4)
-    for i in range(12):
-        d = secs(0.03)
-        m.place(crush(sine(np.full(d, g.uniform(500, 2600)), d) * env(d, 0.001, 0), 3, 3),
-                GOLD + i * 0.042, 0.3, g.uniform(-0.8, 0.8))
-    # Verde: rafaga de datos que se agota.
+    m.place(band(stutter, 800, 6000) * env(n, 0.05, 0, curve=0.9), GOLD, 1.1, 0.4)
     n = secs(1.35)
     burst = noise(n, g) * (g.random(n) > 0.93)
-    m.place(crush(band(burst, 1500, 12000) * 2.4, 3, 4) * np.exp(-np.linspace(0, 3.6, n)),
-            GREEN, 0.9)
-    for i in range(26):
+    m.place(crush(band(burst, 1200, 9000) * 2.4, 3, 4) * np.exp(-np.linspace(0, 3.6, n)),
+            GREEN, 0.8)
+    for i in range(22):
         d = secs(g.uniform(0.01, 0.04))
-        f = g.uniform(1500, 6000)
+        f = g.uniform(1200, 5000)
         m.place(crush(sine(np.full(d, f), d) * env(d, 0.001, 0), 3, 3),
-                GREEN + g.uniform(0, 1.0) ** 1.5, g.uniform(0.12, 0.28), g.uniform(-1, 1))
-    return reverb(m.stereo(), 0.9, g, 8000, 0.22)
+                GREEN + g.uniform(0, 1.0) ** 1.5, g.uniform(0.12, 0.26), g.uniform(-1, 1))
+    return reverb(m.stereo(), 0.8, g, 8000, 0.2)
 
 
 def v_aliento(g):
-    """Humano: inspirar, contener, soltar. Con un pulso debajo."""
+    """Humano. La gota es una inspiracion corta, casi un susurro con acento."""
     m = Mix()
-    # Inspiracion durante las gotas.
-    n = secs(VIDEO)
-    breath = band(noise(n, g, 'pink'), 300, 4500)
-    m.place(sweep_band(breath, ramp(n, 500, 2600, 1.4), 'bandpass', 2) * ramp(n, 0.1, 1.0, 1.6),
-            0, 0.5)
-    # Pulso: se acelera hacia el relevo.
-    beat = 0.0
-    interval = 0.62
+
+    def drop(gen, pitch):
+        n = secs(0.62)
+        air = band(noise(n, gen, 'pink'), 350, 5000)
+        shaped = sweep_band(air, ramp(n, 700 * pitch, 2400 * pitch, 1.1), 'bandpass', 2)
+        voiced = sine(np.full(n, 330.0 * pitch), n) * env(n, 0.05, 0, curve=1.6) * 0.25
+        return shaped * env(n, 0.09, 0, curve=1.3) * 1.6 + voiced
+
+    def stretch(gen):
+        n = secs(0.66)
+        air = band(noise(n, gen, 'pink'), 300, 5000)
+        return sweep_band(air, ramp(n, 800, 2800, 1.2), 'bandpass', 2) * ramp(n, 0.25, 1.0, 1.3)
+
+    opening(m, g, drop, stretch, 1.0)
+    beat, gap = 0.0, 0.62
     while beat < HANDOFF:
         d = secs(0.28)
-        m.place(sine(ramp(d, 62, 34, 0.5), d) * env(d, 0.004, 0, curve=1.6), beat, 0.55)
-        beat += interval
-        interval *= 0.86
-    # Contener: el aire se corta y queda un tono tenso.
-    n = secs(1.5)
+        m.place(sine(ramp(d, 62, 34, 0.5), d) * env(d, 0.004, 0, curve=1.6), beat, 0.4)
+        beat += gap
+        gap *= 0.86
+    # Contener: el aire se corta y queda una tension con armonicos audibles.
+    n = secs(1.4)
     m.place(sine(np.full(n, 73.4), n) * ramp(n, 0.6, 1.0) * np.exp(-np.linspace(0, 1.2, n)),
-            HANDOFF, 0.35)
-    # La tension tiene que oirse: armonicos del tono contenido, con un batido
-    # lento. Solo con la fundamental grave la fase quedaba muda.
+            HANDOFF, 0.3)
     tense = sine(np.full(n, 440.4), n) + sine(np.full(n, 587.3), n)
     m.place(tense / 2 * (0.6 + 0.4 * np.sin(np.linspace(0, 14, n)))
-            * ramp(n, 0.5, 1.0) * np.exp(-np.linspace(0, 2.0, n)), HANDOFF, 0.45, -0.2)
-    m.place(band(noise(secs(0.25), g), 400, 4000) * env(secs(0.25), 0.002, 0, curve=2.5),
-            HANDOFF, 0.6)
+            * ramp(n, 0.5, 1.0) * np.exp(-np.linspace(0, 2.0, n)), HANDOFF, 0.35, -0.2)
     n = secs(0.55)
-    m.place(band(noise(n, g, 'pink'), 400, 3000) * env(n, 0.25, 0, curve=1.2), GOLD, 0.2, -0.3)
-    # Soltar: espiracion larga que se apaga sola.
+    m.place(band(noise(n, g, 'pink'), 400, 3000) * env(n, 0.25, 0, curve=1.2), GOLD, 0.3, -0.3)
     n = secs(1.35)
     out = band(noise(n, g, 'pink'), 250, 6000)
-    m.place(sweep_band(out, ramp(n, 2400, 500, 0.8), 'lowpass', 2)
-            * ramp(n, 0.0, 1.0, 0.2) * np.exp(-np.linspace(0, 2.4, n)), GREEN, 0.6)
-    m.place(sine(ramp(n, 98, 49, 0.8), n) * np.exp(-np.linspace(0, 2.8, n)), GREEN, 0.25)
-    return reverb(m.stereo(), 1.5, g, 5000, 0.34)
+    m.place(sweep_band(out, ramp(n, 2400, 600, 0.8), 'lowpass', 2)
+            * ramp(n, 0.0, 1.0, 0.2) * np.exp(-np.linspace(0, 2.4, n)), GREEN, 0.7)
+    m.place(sine(ramp(n, 98, 49, 0.8), n) * np.exp(-np.linspace(0, 2.8, n)), GREEN, 0.22)
+    return reverb(m.stereo(), 1.3, g, 5000, 0.3)
 
 
 def v_espacio(g):
-    """Ambiente enorme: subgrave, un paso doppler y un lavado que se evapora."""
+    """Ambiente. La gota es un pulso lejano con mucha sala: enorme pero nitido."""
     m = Mix()
-    n = N
-    # El subgrave se abre paso mientras no hay nada mas, pero tiene que dejar
-    # sitio al climax: si llega entero al verde, se lo come y en un altavoz
-    # normal esa fase se queda muda aunque el nivel diga lo contrario.
+
+    def drop(gen, pitch):
+        n = secs(1.3)
+        pulse = metal(n, 165 * pitch, [1, 1.94, 3.3], [.9, .6, .35], gen, .006)
+        air = band(noise(n, gen, 'pink'), 500, 4000) * env(n, 0.01, 0, curve=2.2)
+        return pulse * env(n, 0.008, 0, curve=1.2) + air * 0.5
+
+    def stretch(gen):
+        n = secs(0.66)
+        swell = band(noise(n, gen, 'pink'), 400, 6000) * ramp(n, 0.1, 1.0, 1.8)
+        return sweep_band(swell, ramp(n, 700, 3000, 1.3), 'bandpass', 2) \
+            + sine(ramp(n, 110, 220, 1.5), n) * ramp(n, 0.2, 0.8) * 0.5
+
+    opening(m, g, drop, stretch, 0.95)
+    # El subgrave abre paso pero deja sitio: si llega entero al verde, se lo come.
     body = np.ones(N)
     body[secs(GOLD):] = np.exp(-np.linspace(0, 5.0, N - secs(GOLD)))
-    m.place(sine(ramp(n, 24, 36, 1.2), n) * ramp(n, 0.3, 1.0, 0.8) * body, 0, 0.6)
-    # Paso doppler durante las gotas: cruza el estereo.
-    n = secs(2.4)
-    pass_by = band(noise(n, g, 'pink'), 120, 5000)
-    curve = np.exp(-((np.linspace(-2.2, 2.2, n)) ** 2))
-    m.place(sweep_band(pass_by, 300 + 1800 * curve, 'bandpass', 2) * curve, 0, 0.55, -0.9)
-    m.place(sweep_band(band(noise(n, g, 'pink'), 120, 5000), 300 + 1800 * curve, 'bandpass', 2)
-            * np.roll(curve, secs(0.35)), 0, 0.45, 0.9)
-    # Gemido tectonico al solidificar.
-    n = secs(2.4)
+    m.place(sine(ramp(N, 24, 36, 1.2), N) * ramp(N, 0.3, 1.0, 0.8) * body, 0, 0.45)
+    n = secs(2.2)
     groan = saw(ramp(n, 58, 31, 0.5), n)
     m.place(sweep_band(groan, ramp(n, 2600, 700, 0.7), 'lowpass', 4)
-            * env(n, 0.06, 0, curve=1.1), HANDOFF, 0.9)
-    m.place(metal(n, 116, [1, 2.9, 5.4], [1.6, 1.0, .6], g, .01)
-            * env(n, 0.04, 0, curve=1.0), HANDOFF, 0.5, 0.3)
+            * env(n, 0.06, 0, curve=1.1), HANDOFF, 0.55)
+    m.place(metal(n, 116, [1, 2.9, 5.4], [1.4, .9, .5], g, .01)
+            * env(n, 0.04, 0, curve=1.0), HANDOFF, 0.3, 0.3)
     n = secs(0.55)
-    m.place(band(noise(n, g, 'pink'), 700, 5000) * env(n, 0.3, 0, curve=1.0), GOLD, 0.8)
-    m.place(metal(n, 330, [1, 1.87, 3.2], [.5, .35, .2], g) * env(n, 0.2, 0, curve=1.2),
-            GOLD, 0.38, 0.5)
-    # Verde: un lavado que se abre y se va.
+    m.place(band(noise(n, g, 'pink'), 700, 5000) * env(n, 0.3, 0, curve=1.0), GOLD, 0.4)
     n = secs(1.35)
     wash = band(noise(n, g, 'pink'), 600, 8000)
     m.place(sweep_band(wash, ramp(n, 900, 3400, 0.5), 'bandpass', 2)
-            * ramp(n, 0.0, 1.0, 0.3) * np.exp(-np.linspace(0, 2.6, n)), GREEN, 1.7)
-    m.place(metal(n, 494, [1, 1.6, 2.7], [.7, .5, .3], g) * ramp(n, 1, 0, 1.2), GREEN, 0.45, -0.4)
-    return reverb(m.stereo(), 1.8, g, 4000, 0.38)
+            * ramp(n, 0.0, 1.0, 0.3) * np.exp(-np.linspace(0, 2.6, n)), GREEN, 1.4)
+    m.place(metal(n, 494, [1, 1.6, 2.7], [.7, .5, .3], g) * ramp(n, 1, 0, 1.2), GREEN, 0.4, -0.4)
+    return reverb(m.stereo(), 1.7, g, 4000, 0.36)
 
 
 VARIANTS = [
-    ('ferrofluido', 'Humedo y metalico, escuela T2: burbujas, succion y cristalizacion.', v_ferrofluido),
-    ('trailer', 'Cine: subgrave, riser invertido, golpe en el relevo y floracion final.', v_trailer),
-    ('mercurio', 'Solo agua y mercurio: gotas, viscosidad, chapoteo y efervescencia.', v_mercurio),
-    ('analogico', 'Sintetizador clasico: sierras detune, barrido resonante y arpegio.', v_analogico),
+    ('ferrofluido', 'Humedo y metalico, escuela T2: impacto blando, burbuja y cristalizacion.', v_ferrofluido),
+    ('trailer', 'Cine: tres impactos con cuerpo, estiramiento y floracion final.', v_trailer),
+    ('mercurio', 'Agua y mercurio: plops resonantes, viscosidad y efervescencia.', v_mercurio),
+    ('analogico', 'Sintetizador: plucks resonantes, zap al solidificar y arpegio.', v_analogico),
     ('cristal', 'Vidrio y campanas: limpio, luminoso, casi afinado.', v_cristal),
-    ('fragua', 'Industrial: retumbe, roce de metal, yunque y vapor.', v_fragua),
-    ('minimo', 'Casi musica: un acorde que se completa. Lo mas discreto.', v_minimo),
-    ('granular', 'Glitch: granos, bitcrush y una rafaga de datos.', v_granular),
-    ('aliento', 'Humano: inspirar, contener y soltar, con pulso debajo.', v_aliento),
-    ('espacio', 'Ambiente enorme: subgrave, paso doppler y un lavado que se evapora.', v_espacio),
+    ('fragua', 'Industrial: martillazos, retumbe, yunque y vapor.', v_fragua),
+    ('minimo', 'Casi musica: notas pulsadas y un acorde que se completa.', v_minimo),
+    ('granular', 'Glitch: rafagas de granos machacados y estallido de datos.', v_granular),
+    ('aliento', 'Humano: tres inspiraciones, tension contenida y soltar.', v_aliento),
+    ('espacio', 'Ambiente enorme: pulsos lejanos con sala y un lavado que se evapora.', v_espacio),
 ]
 
 
@@ -608,49 +694,29 @@ def write(name, stereo):
     return target.stat().st_size
 
 
-PHASES = [('gotas', 0, VIDEO), ('rigido', VIDEO, GOLD),
-          ('giro', GOLD, GREEN), ('verde', GREEN, END)]
-
-
-def audible(stereo):
-    """Energia por fase entre 300 Hz y 5 kHz. La medida que importa: el nivel
-    total engana, porque un subgrave enorme lo sube sin que se oiga nada en un
-    altavoz de portatil. Aqui se vio: la fase de gotas era casi toda sub."""
-    mono = stereo.mean(axis=0)
-    out = []
-    for _, a, b in PHASES:
-        seg = mono[secs(a):secs(b)]
-        spectrum = np.abs(np.fft.rfft(seg * np.hanning(len(seg)))) ** 2
-        freqs = np.fft.rfftfreq(len(seg), 1 / SR)
-        picked = (freqs >= 300) & (freqs < 5000)
-        out.append(10 * np.log10(np.sum(spectrum[picked]) / len(seg) + 1e-12))
-    return out
-
-
 def main():
     OUT.mkdir(exist_ok=True)
     index = []
     warnings = []
     for i, (name, blurb, fn) in enumerate(VARIANTS, 1):
         filename = f'{i:02d}-{name}.mp3'
-        stereo = fn(rng(1000 + i))
+        stereo = shape(fn(rng(1000 + i)))
         levels = audible(stereo)
         size = write(filename, stereo)
         index.append({'id': i, 'name': name, 'file': filename, 'about': blurb})
         bars = ' '.join(f'{p[0][:3]} {d:5.1f}' for p, d in zip(PHASES, levels))
         print(f'{filename:<22} {size / 1024:6.1f} kB  {bars}')
-        quiet = max(levels) - min(levels)
-        if quiet > 12:
-            flojo = PHASES[levels.index(min(levels))][0]
-            warnings.append(f'  {name}: la fase "{flojo}" queda {quiet:.0f} dB por '
-                            f'debajo de la mas fuerte, no se va a oir')
+        # La apertura manda: si no es de las mas fuertes, algo se ha torcido.
+        if levels[0] < max(levels) - 3.0:
+            warnings.append(f'  {name}: la apertura queda {max(levels) - levels[0]:.0f} dB '
+                            f'por debajo de la fase mas fuerte')
     marks = {'video': VIDEO, 'handoff': HANDOFF, 'gold': GOLD, 'green': GREEN,
              'end': END, 'total': TOTAL}
     (OUT / 'index.json').write_text(
         json.dumps({'marks': marks, 'variants': index}, indent=2, ensure_ascii=False) + '\n')
-    print(f'\ndB en 300 Hz-5 kHz por fase. marcas: {marks}')
+    print(f'\ndB con ponderacion A por fase. marcas: {marks}')
     if warnings:
-        print('\nDesequilibrios:')
+        print('\nLa apertura no manda:')
         print('\n'.join(warnings))
 
 
