@@ -1,7 +1,7 @@
 // Atmósfera independiente: la escultura emite y desplaza aire cercano.
 // El movimiento vive en atmosphere-motion; aquí solo se dibuja.
 import * as THREE from 'three';
-import { createAirMotion } from './atmosphere-motion.js?v=89cd388f';
+import { createAirMotion } from './atmosphere-motion.js?v=042b18e7';
 
 const SMOKE_VERTEX = `
   varying vec2 vUv;
@@ -35,15 +35,16 @@ const SMOKE_FRAGMENT = `
 const PARTICLE_VERTEX = `
   uniform float uTime, uIntensity, uPixelRatio, uRadius;
   uniform vec2 uFocus;
-  attribute float aSize, aSeed;
+  attribute float aSize, aSeed, aAge;
   varying float vAlpha, vSeed;
   void main() {
     vec4 mv = modelViewMatrix*vec4(position,1.0);
     gl_Position = projectionMatrix*mv;
-    gl_PointSize = (1.2+aSize*2.6)*uPixelRatio*3.6/-mv.z;
+    float spark = exp(-max(aAge,0.0)*2.5);
+    gl_PointSize = (1.2+aSize*2.6)*(1.0+spark*0.65)*uPixelRatio*3.6/-mv.z;
     float nearMetal = 1.0-smoothstep(uRadius*0.4,uRadius*2.5,distance(position.xy,uFocus));
     float breath = 0.78+0.22*sin(uTime*0.45+aSeed);
-    vAlpha = uIntensity*breath*mix(0.16,0.6,nearMetal);
+    vAlpha = uIntensity*breath*mix(0.16,0.6,nearMetal)*(1.0+spark*1.2)*step(0.0,aAge);
     vSeed = aSeed;
   }`;
 const PARTICLE_FRAGMENT = `
@@ -84,8 +85,12 @@ export function createAtmosphere({ scene, stage, mobile = false, reduceMotion = 
     return mesh;
   });
   const positions = new Float32Array(motion.bodies.length*3);
+  const ages = new Float32Array(motion.bodies.length);
+  const emission = { value: 0 };
+  let emitter = null;
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position',new THREE.BufferAttribute(positions,3).setUsage(THREE.DynamicDrawUsage));
+  geometry.setAttribute('aAge',new THREE.BufferAttribute(ages,1).setUsage(THREE.DynamicDrawUsage));
   geometry.setAttribute('aSize',new THREE.Float32BufferAttribute(motion.bodies.map(body=>body.size**2),1));
   geometry.setAttribute('aSeed',new THREE.Float32BufferAttribute(motion.bodies.map(body=>body.seed),1));
   const material = new THREE.ShaderMaterial({
@@ -98,7 +103,30 @@ export function createAtmosphere({ scene, stage, mobile = false, reduceMotion = 
   group.add(points);
 
   return {
-    intensity,
+    intensity, emission,
+    prepareEmission(model) {
+      if (reduceMotion) return;
+      const meshes = [];
+      model.traverse(node => { if (node.isMesh && node.geometry.attributes.position) meshes.push(node); });
+      if (!meshes.length) return;
+      model.updateWorldMatrix(true, true);
+      const anchors = motion.bodies.map((_, i) => {
+        const mesh = meshes[i % meshes.length];
+        const geometry = mesh.geometry;
+        const attribute = geometry.attributes.position;
+        const vertex = new THREE.Vector3().fromBufferAttribute(attribute, Math.floor(Math.random()*attribute.count));
+        geometry.computeBoundingBox();
+        const size = geometry.boundingBox.getSize(new THREE.Vector3()).max(new THREE.Vector3(0.001,0.001,0.001));
+        const p = vertex.clone().sub(geometry.boundingBox.min).divide(size);
+        const wave = Math.hypot(p.x-0.5,(p.y-0.5)*0.85,(p.z-0.5)*0.2)
+          + Math.sin(p.x*12+p.y*8)*0.018 + Math.sin(p.y*19-p.z*5)*0.012;
+        return { mesh, vertex, world: new THREE.Vector3(), wave };
+      });
+      const origin = new THREE.Box3().setFromObject(model).getCenter(new THREE.Vector3());
+      emitter = { model, anchors, origin, samples: anchors.map(() => ({x:0,y:0,z:0,wave:0})) };
+      emission.value = 0;
+      motion.prepareEmission();
+    },
     setSize(camera,pixelRatio) {
       const h = Math.tan(THREE.MathUtils.degToRad(camera.fov/2))*camera.position.z;
       motion.setBounds(h*camera.aspect,h);
@@ -124,13 +152,24 @@ export function createAtmosphere({ scene, stage, mobile = false, reduceMotion = 
       }
       pointer.active=target.active && !reduceMotion;
       pointer.dragging=dragging;
+      if (emitter) {
+        emitter.model.updateWorldMatrix(true,true);
+        emitter.anchors.forEach((anchor,i) => {
+          anchor.world.copy(anchor.vertex).applyMatrix4(anchor.mesh.matrixWorld);
+          Object.assign(emitter.samples[i], { x:anchor.world.x, y:anchor.world.y, z:anchor.world.z, wave:anchor.wave });
+        });
+        motion.releaseEmission(emission.value,emitter.samples,emitter.origin);
+        if (emission.value >= 1) emitter = null;
+      }
       // La emisión empieza cuando se descubre el metal, no durante el vídeo.
       if(intensity.value>0) motion.step(reduceMotion?0:delta,focus,radius,typeof spin==='number'?{x:0,y:spin}:spin,pointer);
       for(let i=0;i<motion.bodies.length;i++) {
         const body=motion.bodies[i];
         positions[i*3]=body.x; positions[i*3+1]=body.y; positions[i*3+2]=body.z;
+        ages[i]=body.pending?-1:body.age;
       }
       geometry.attributes.position.needsUpdate=true;
+      geometry.attributes.aAge.needsUpdate=true;
       for(let i=0;i<smoke.length;i++) {
         const cloud=motion.clouds[i], mesh=smoke[i];
         mesh.position.set(cloud.x,cloud.y,cloud.z);

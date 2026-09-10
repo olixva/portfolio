@@ -10,6 +10,24 @@ const path = require('node:path');
     return motion;
   }
   const focus = { x: 0, y: 0 };
+  const emission = air();
+  const sources = emission.bodies.map((_, i) => ({ x: i * 0.04, y: 0.1, z: 0, wave: 0.08 + i * 0.045 }));
+  emission.prepareEmission();
+  emission.releaseEmission(0, sources, focus);
+  assert.ok(emission.bodies.every(body => body.pending), 'No particle is scattered before the wave starts');
+  assert.equal(emission.bodies[4].x, sources[4].x, 'Particles start on the metal surface');
+  emission.releaseEmission(0.4, sources, focus);
+  assert.ok(!emission.bodies[0].pending && emission.bodies.at(-1).pending, 'The outward wave releases inner points before outer points');
+  assert.ok(Math.hypot(emission.bodies[0].vx, emission.bodies[0].vy) > 0.5, 'The initial release has an outward impulse');
+  const launchedX = emission.bodies[0].x;
+  const launchedVx = emission.bodies[0].vx;
+  emission.releaseEmission(0.4, sources, focus);
+  assert.equal(emission.bodies[0].vx, launchedVx, 'The wave must not relaunch an already released particle');
+  for (let i = 0; i < 30; i++) emission.step(1 / 60, focus, 1);
+  assert.notEqual(emission.bodies[0].x, launchedX, 'Released particles travel independently of their source');
+  assert.equal(emission.bodies.at(-1).x, sources.at(-1).x, 'Unreached points wait on the surface');
+  emission.releaseEmission(1, sources, focus);
+  assert.ok(emission.bodies.every(body => !body.pending), 'Completing or skipping the wave releases all particles');
   const calm = air(), spinning = air();
   for (const system of [calm, spinning]) {
     Object.assign(system.bodies[0], { x: 0.4, y: 0.2, z: 0 });

@@ -10,7 +10,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=9ecd0025';
 
-import { createAtmosphere } from './atmosphere.js?v=ea1a3486';
+import { createAtmosphere } from './atmosphere.js?v=d8666af5';
 import { prepareIntro } from './intro.js?v=2c56723e';
 
 const MODEL = 'assets/ao-sculpture.glb?v=e9ab29ff';
@@ -330,6 +330,7 @@ function start() {
     if (!model) root.classList.remove('ao3d-pending');
     intro?.dispose();
     introRunning = false;
+    atmosphere.emission.value = 1;
     settledAt = clock.elapsedTime;
     interactionTween?.kill();
     if (gsap) {
@@ -416,12 +417,14 @@ function start() {
       // Primero se descubre el metal dorado real. Un giro breve muestra volumen
       // antes de que cambie la iluminación; la atmósfera entra después.
       .to(tilt.rotation, { y: 0.09, x: -0.025, duration: 0.55 }, goldStart)
+      .add(() => atmosphere.prepareEmission(model), greenStart)
       .to(tilt.rotation, { y: 0, x: 0, duration: 1.35 }, greenStart)
       .to(uniforms.uEnvironmentMix, { value: 1, duration: 1.35, ease: 'sine.inOut' }, greenStart)
+      .to(atmosphere.emission, { value: 1, duration: 1.35, ease: 'sine.inOut' }, greenStart)
       .to(uniforms.uBaseMix, { value: 0.18, duration: 1.35 }, greenStart)
       .to(uniforms.uRim, { value: LOOK.rim, duration: 0.7 }, greenStart)
       .to(rim, { intensity: LOOK.rimLight, duration: 0.6 }, greenStart + 0.75)
-      .to(atmosphere.intensity, { value: 1, duration: 1.0, ease: 'sine.inOut' }, greenStart + 0.8)
+      .to(atmosphere.intensity, { value: 1, duration: 0.22, ease: 'sine.out' }, greenStart)
       .add(releaseContent, isMobile() ? 0.28 : 0.35);
   }
 
@@ -457,12 +460,13 @@ function start() {
           varying vec3 vSteelSurface;
           float steelWave() {
             vec3 p = vSteelSurface;
-            // La onda nace abajo a la izquierda y recorre el volumen del metal.
-            return length((p - vec3(0.05,0.12,0.5))*vec3(1.0,0.85,0.2))
+            // La presión nace en el interior y alcanza primero los relieves
+            // centrales, después los extremos de la pieza.
+            return length((p - vec3(0.5))*vec3(1.0,0.85,0.2))
               + sin(p.x*12.0+p.y*8.0)*0.018 + sin(p.y*19.0-p.z*5.0)*0.012;
           }
-          float steelFront() { return mix(-0.15,1.6,uEnvironmentMix); }
-          float steelGreen() { return 1.0-smoothstep(steelFront()-0.085,steelFront()+0.085,steelWave()); }
+          float steelFront() { return mix(-0.06,0.76,uEnvironmentMix); }
+          float steelGreen() { return 1.0-smoothstep(steelFront()-0.045,steelFront()+0.045,steelWave()); }
         `;
         const environmentChunk = THREE.ShaderChunk.envmap_physical_pars_fragment.replace(
           /textureCubeUV\( envMap, ([^;]+) \)/g,
@@ -472,11 +476,12 @@ function start() {
           .replace('#include <envmap_physical_pars_fragment>', environmentChunk)
           .replace('uRimColor * fresnel * uRim', 'uRimColor * fresnel * uRim * steelGreen()')
           .replace('#include <opaque_fragment>', `
-            float waveDistance = (steelWave()-steelFront())/0.055;
+            float waveDistance = (steelWave()-steelFront())/0.035;
             float crest = exp(-waveDistance*waveDistance);
             float activeWave = smoothstep(0.0,0.12,uEnvironmentMix)*(1.0-smoothstep(0.88,1.0,uEnvironmentMix));
             float grazing = pow(1.0-clamp(abs(dot(normalize(normal),normalize(vViewPosition))),0.0,1.0),2.0);
-            outgoingLight += vec3(0.65,0.95,0.18)*crest*activeWave*(0.14+grazing*0.5);
+            float core = exp(-steelWave()*steelWave()*45.0)*sin(uEnvironmentMix*3.14159)*activeWave;
+            outgoingLight += vec3(0.78,1.0,0.32)*(crest*(0.3+grazing*0.8)+core*0.16)*activeWave;
             #include <opaque_fragment>
           `)
           .replace('#include <roughnessmap_fragment>', `

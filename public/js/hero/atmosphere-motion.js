@@ -6,7 +6,7 @@ export function createAirMotion({ count = 110, cloudCount = 9, random = Math.ran
   let width = 2, height = 1, elapsed = 0, initialized = false;
   const bodies = Array.from({ length: count }, () => ({
     x: 0, y: 0, z: random() * 2 - 1.4, vx: 0, vy: 0,
-    seed: random() * 100, size: random(), angle: random() * Math.PI * 2
+    seed: random() * 100, size: random(), angle: random() * Math.PI * 2, age: 5, pending: false
   }));
   const clouds = Array.from({ length: cloudCount }, (_, i) => ({
     x: 0, y: 0, z: 0, depth: i % 4 === 0 ? 0.25 : -0.25 - random() * 0.5,
@@ -89,6 +89,25 @@ export function createAirMotion({ count = 110, cloudCount = 9, random = Math.ran
 
   return {
     bodies, clouds,
+    prepareEmission() {
+      for (const body of bodies) { body.pending = true; body.age = 0; body.vx = body.vy = 0; }
+    },
+    releaseEmission(progress, samples, origin) {
+      const front = -0.06 + progress * 0.82;
+      for (let i = 0; i < bodies.length; i++) {
+        const body = bodies[i], source = samples[i];
+        if (!body.pending || !source) continue;
+        body.x = source.x; body.y = source.y; body.z = source.z;
+        if (front < source.wave && progress < 1) continue;
+        body.pending = false;
+        const depth = (3.6 - body.z) / 3.6;
+        const angle = Math.atan2(body.y - origin.y, body.x - origin.x) + (random() - 0.5) * 0.7;
+        const reach = Math.hypot(width * depth, height * depth);
+        const speed = reach * (0.38 + random() * 0.65);
+        body.vx = Math.cos(angle) * speed;
+        body.vy = Math.sin(angle) * speed;
+      }
+    },
     setBounds(w, h) {
       const sx = w / width, sy = h / height;
       width = w; height = h;
@@ -113,7 +132,11 @@ export function createAirMotion({ count = 110, cloudCount = 9, random = Math.ran
       while (remaining > 0.000001) {
         const dt = Math.min(remaining, 1 / 120);
         elapsed += dt; remaining -= dt;
-        for (const body of bodies) forces(body, dt, focus, radius, spin, pointer, false);
+        for (const body of bodies) {
+          if (body.pending) continue;
+          body.age += dt;
+          forces(body, dt, focus, radius, spin, pointer, false);
+        }
         for (const cloud of clouds) {
           cloud.age += dt / cloud.life;
           if (cloud.age >= 1) { cloud.age %= 1; spawn(cloud, focus, radius); }
