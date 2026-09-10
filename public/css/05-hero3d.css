@@ -22,8 +22,11 @@ html.ao3d-intro .hero .line>span{animation:none!important}
    titular a opacidad baja y se solapaban las letras. */
 @media(max-width:760px){:root{--ao3d-band:clamp(180px,32svh,280px)}.ao3d-canvas{inset:0 0 auto;height:var(--ao3d-band,300px);touch-action:pan-y}html.ao3d-on .hero{padding-top:calc(var(--ao3d-band) + 12px);text-align:center}html.ao3d-pending .hero{padding-top:calc(var(--ao3d-band) + 12px);text-align:center}html.ao3d-on .hero-eyebrow{justify-content:center}html.ao3d-pending .hero-eyebrow{justify-content:center}html.ao3d-on .hero-description{margin-inline:auto}html.ao3d-pending .hero-description{margin-inline:auto}html.ao3d-on .hero-description p{margin-inline:auto}html.ao3d-pending .hero-description p{margin-inline:auto}html.ao3d-on .hero-bottom{text-align:left}html.ao3d-pending .hero-bottom{text-align:left}}
 @media(prefers-reduced-motion:reduce){.ao3d-canvas{transition:none}.hero .hero-content{transition:none}}
-/* Vídeo y WebGL comparten exactamente el mismo rectángulo durante el relevo. */
-html.ao3d-intro{overflow:hidden}
+/* Vídeo y WebGL comparten exactamente el mismo rectángulo durante el relevo.
+   El overflow se mantiene también durante el relevo en si, porque en movil
+   releaseContent() se dispara al principio de la fase unificada y quita la
+   clase ao3d-intro antes de que termine la animacion. */
+html.ao3d-intro,html.ao3d-revealing{overflow:hidden}
 html.ao3d-intro .header,html.ao3d-revealing .header{z-index:70}
 html.ao3d-intro .skip:focus{z-index:80}
 html.ao3d-intro:not(.ao3d-revealing) body:before{content:"";position:fixed;inset:0;background:var(--dark);z-index:59}
@@ -47,4 +50,8 @@ html.ao3d-intro:not(.ao3d-revealing) body:before{content:"";position:fixed;inset
 @keyframes loader-spin{to{transform:rotate(360deg)}}
 @keyframes loader-appear{from{opacity:0}to{opacity:1}}
 
-@media(max-width:760px){.ao-intro{top:68px}.ao-intro video{top:calc(var(--ao3d-band) / 2);width:94vw;height:var(--ao3d-band)}}
+@media(max-width:760px){.ao-intro{top:68px}.ao-intro video{width:94vw;height:var(--ao3d-band)}}
+/* En movil con movimiento permitido, el video arranca centrado en el hero y
+   el relevo lo lleva desde ahi hasta la banda de la escultura. Con movimiento
+   reducido la regla de arriba manda y el video sigue en la banda, como antes. */
+@media(max-width:760px) and (prefers-reduced-motion:no-preference){.ao-intro video{top:50%}}

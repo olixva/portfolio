@@ -206,16 +206,29 @@ function start() {
     uniforms.uAmp.value += (targetAmp - uniforms.uAmp.value) * Math.min(1, delta * 3.2);
 
     if (!introRunning) {
-      // Al soltar, el giro manual vuelve a cero y la pieza retoma su deriva.
-      if (!drag.on) {
-        const back = 1 - Math.pow(0.12, delta);
-        drag.yaw -= drag.yaw * back;
-        drag.pitch -= drag.pitch * back;
+      // Escritorio: la pieza sigue al raton con puntero fino, tiene micro-
+      // oscilaciones sutiles y al soltar el drag vuelve a la pose neutra.
+      // Movil: la pieza gira sola con una oscilacion amplia y lenta, y el
+      // dedo la desplaza; el offset de drag persiste al soltar. Con
+      // movimiento reducido este bucle no corre, asi que no hace falta
+      // guard adicional.
+      const back = 1 - Math.pow(0.12, delta);
+      let targetY, targetX;
+      if (isMobile()) {
+        const autoY = Math.sin(time * 0.157) * 1.57;
+        targetY = autoY * interaction.value + drag.yaw;
+        targetX = scrollTilt * interaction.value + drag.pitch;
+      } else {
+        if (!drag.on) {
+          drag.yaw -= drag.yaw * back;
+          drag.pitch -= drag.pitch * back;
+        }
+        const follow = drag.on ? 0 : (finePointer.matches && !isMobile() ? LOOK.follow : 0);
+        const baseY = aim.x * 0.55 * follow + Math.sin(time * 0.3) * 0.1;
+        const baseX = -aim.y * 0.3 * follow + Math.sin(time * 0.24) * 0.06 + scrollTilt;
+        targetY = baseY * interaction.value + drag.yaw;
+        targetX = baseX * interaction.value + drag.pitch;
       }
-      // Mientras se arrastra, el seguimiento del puntero no compite.
-      const follow = drag.on ? 0 : (finePointer.matches && !isMobile() ? LOOK.follow : 0);
-      const targetY = (aim.x * 0.55 * follow + Math.sin(time * 0.3) * 0.1) * interaction.value + drag.yaw;
-      const targetX = (-aim.y * 0.3 * follow + Math.sin(time * 0.24) * 0.06 + scrollTilt) * interaction.value + drag.pitch;
       const ease = Math.min(1, delta * (drag.on ? 14 : 2.4));
       tilt.rotation.y += (targetY - tilt.rotation.y) * ease;
       tilt.rotation.x += (targetX - tilt.rotation.x) * ease;
@@ -243,6 +256,28 @@ function start() {
     tilt.rotation.set(0, 0, 0.035);
     camera.position.z = 3.6;
     // Ancla el fotograma al modelo, no a la pantalla mientras se desplaza.
+    camera.updateMatrixWorld();
+    scene.updateMatrixWorld(true);
+    model?.traverse(node => {
+      if (node.isMesh && node.material.userData.introMatrix) {
+        node.material.userData.introMatrix.copy(camera.projectionMatrix)
+          .multiply(camera.matrixWorldInverse).multiply(node.matrixWorld);
+      }
+    });
+  }
+
+  // Variante de matchVideoPose que solo refresca la proyeccion del fotograma
+  // del video sobre la superficie del modelo. No toca stage.position/scale ni
+  // tilt.rotation porque la fase unificada del relevo anima esas magnitudes
+  // por GSAP; este helper se llama desde el onUpdate de ese tween para que
+  // la textura del video quede pegada al modelo mientras ambos se mueven.
+  function matchVideoProjection() {
+    const videoRect = intro.video.getBoundingClientRect();
+    const videoScale = Math.min(videoRect.width / 1248, videoRect.height / 704);
+    const centerX = videoRect.left + videoRect.width / 2 - rect.left - rect.width / 2;
+    const centerY = videoRect.top + videoRect.height / 2 - rect.top - rect.height / 2;
+    uniforms.uIntroFit.value.set(rect.width / (1248 * videoScale), rect.height / (704 * videoScale));
+    uniforms.uIntroOffset.value.set(-centerX / (1248 * videoScale), centerY / (704 * videoScale));
     camera.updateMatrixWorld();
     scene.updateMatrixWorld(true);
     model?.traverse(node => {
@@ -311,23 +346,72 @@ function start() {
     transitioning = true;
     root.classList.add('ao3d-revealing');
     const pose = restPose(camera);
-    introTimeline = gsap.timeline({ defaults: { ease: 'power2.inOut' }, onComplete: finishIntro })
-      .to(intro.video, { opacity: 0, duration: 0.18, ease: 'power1.inOut' }, 0)
-      .set(intro.overlay.querySelector('.ao-intro-backdrop'), { opacity: 0 }, 0)
-      .to(tilt.rotation, { z: 0, duration: 0.9 }, 0.08)
-      .to(stage.position, { x: pose.x, y: pose.y, duration: 0.9 }, 0.08)
-      .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration: 0.9 }, 0.08)
-      // La iluminacion pasa de dorada a verde DEBAJO de la proyeccion, que sigue
-      // entera: por eso existe, para que ese cambio no se vea ocurrir. Solo
-      // cuando ya ha terminado se levanta la proyeccion, y lo que aparece
-      // debajo es un modelo que ya esta en su color final. Si la proyeccion se
-      // va antes (como pasaba con 0.08s), se ve al modelo virar en directo.
-      .to(uniforms.uEnvironmentMix, { value: 1, duration: 0.5 }, 0)
-      .to(uniforms.uBaseMix, { value: 0.18, duration: 0.5 }, 0)
-      .to(uniforms.uIntroProjection, { value: 0, duration: 0.5 }, 0.3)
-      .to(uniforms.uRim, { value: LOOK.rim, duration: 0.7 }, 0.2)
-      .to(rim, { intensity: LOOK.rimLight, duration: 0.7 }, 0.2)
-      .add(releaseContent, 0.4);
+    // Relevo en movil: una sola fase donde el video sube, se encoge hasta
+    // coincidir con el frame del modelo en la banda, y se desvanece a la vez
+    // que el modelo escala hasta su pose de reposo. La proyeccion del fotograma
+    // del video sobre el modelo se refresca cada frame (matchVideoProjection
+    // en onUpdate) para que la textura quede pegada al modelo mientras ambos
+    // se mueven. releaseContent al principio dispara la transicion CSS de las
+    // letras, que terminan de aparecer antes de que acabe la fase. En
+    // escritorio travel=0 y t0=0: la rama de abajo reproduce el timeline
+    // original sin cambios.
+    const travel = isMobile() ? Math.max(0, parseFloat(getComputedStyle(intro.video).top) - rect.height / 2) : 0;
+    const t0 = travel > 1 ? 1.0 : 0;
+    const currentTop = parseFloat(getComputedStyle(intro.video).top);
+    const targetTop = rect.height / 2;
+    introTimeline = gsap.timeline({ defaults: { ease: 'power2.inOut' }, onComplete: finishIntro });
+    if (t0 > 0) {
+      // El video ya tiene transform: translate(-50%,-50%) en el CSS para
+      // quedar centrado; GSAP sobrescribe el transform inline, asi que hay que
+      // reescribir los percent en cada extremo para no perder el centrado al
+      // encoger. xPercent/yPercent y scale componen limpio en una sola matrix.
+      introTimeline.fromTo(intro.video,
+        { xPercent: -50, yPercent: -50, scale: 1, top: currentTop + 'px' },
+        { xPercent: -50, yPercent: -50, scale: 0.82, top: targetTop + 'px', duration: t0, onUpdate: matchVideoProjection },
+        0)
+        // El video se desvanece a lo largo de TODA la fase (no en 0.18s).
+        // Si cae a 0 demasiado pronto, el modelo aparece de golpe con su
+        // material real (verde rim, reflejos de escena) y se nota un corte
+        // entre el frame del video (tono dorado) y el modelo. Con el fade
+        // lento, la transicion es continua: el video se vuelve transparente
+        // mientras el modelo de atras sigue mostrando la textura del video
+        // (uIntroProjection=1), asi que durante toda la fase el usuario ve
+        // "lo mismo" haciendose mas pequeno y subiendo.
+        .to(intro.video, { opacity: 0, duration: t0, ease: 'power1.inOut' }, 0)
+        .set(intro.video, { pointerEvents: 'none' }, t0)
+        .set(intro.overlay.querySelector('.ao-intro-backdrop'), { opacity: 0 }, 0)
+        .to(tilt.rotation, { z: 0, duration: t0 }, 0)
+        .to(stage.position, { x: pose.x, y: pose.y, duration: t0 }, 0)
+        .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration: t0 }, 0)
+        // La iluminacion del modelo se prepara en la primera mitad (debajo de
+        // la proyeccion del video, que sigue entera). uIntroProjection se
+        // quita solo en el ultimo 20% de la fase, cuando el video ya esta
+        // casi transparente, para que el cambio al material real no se note.
+        .to(uniforms.uEnvironmentMix, { value: 1, duration: 0.5 }, 0)
+        .to(uniforms.uBaseMix, { value: 0.18, duration: 0.5 }, 0)
+        .to(uniforms.uIntroProjection, { value: 0, duration: 0.2 }, t0 - 0.2)
+        .to(uniforms.uRim, { value: LOOK.rim, duration: 0.5 }, 0.3)
+        .to(rim, { intensity: LOOK.rimLight, duration: 0.5 }, 0.3)
+        .add(releaseContent, 0);
+    } else {
+      introTimeline
+        .to(intro.video, { opacity: 0, duration: 0.18, ease: 'power1.inOut' }, 0)
+        .set(intro.overlay.querySelector('.ao-intro-backdrop'), { opacity: 0 }, 0)
+        .to(tilt.rotation, { z: 0, duration: 0.9 }, 0.08)
+        .to(stage.position, { x: pose.x, y: pose.y, duration: 0.9 }, 0.08)
+        .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration: 0.9 }, 0.08)
+        // La iluminacion pasa de dorada a verde DEBAJO de la proyeccion, que sigue
+        // entera: por eso existe, para que ese cambio no se vea ocurrir. Solo
+        // cuando ya ha terminado se levanta la proyeccion, y lo que aparece
+        // debajo es un modelo que ya esta en su color final. Si la proyeccion se
+        // va antes (como pasaba con 0.08s), se ve al modelo virar en directo.
+        .to(uniforms.uEnvironmentMix, { value: 1, duration: 0.5 }, 0)
+        .to(uniforms.uBaseMix, { value: 0.18, duration: 0.5 }, 0)
+        .to(uniforms.uIntroProjection, { value: 0, duration: 0.5 }, 0.3)
+        .to(uniforms.uRim, { value: LOOK.rim, duration: 0.7 }, 0.2)
+        .to(rim, { intensity: LOOK.rimLight, duration: 0.7 }, 0.2)
+        .add(releaseContent, 0.4);
+    }
   }
 
   const draco = new DRACOLoader().setDecoderPath('vendor/three/addons/libs/draco/gltf/');
