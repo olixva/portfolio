@@ -25,7 +25,7 @@ scripts/         comprobaciones y sellado de caché
 
 ### Las capas de CSS
 
-Se cargan en orden y **ese orden importa**: `01-base` (variables, reinicio, tipografía), `02-layout` (cabecera, sección, pie), `03-components` (piezas reutilizables), `04-sections` (cada sección de la página) y `05-hero3d` (la capa WebGL). Cada selector se declara una sola vez por capa y por consulta de medios; si hace falta un ajuste, va donde ya vive ese selector en lugar de en una hoja nueva al final.
+Las clases que ya no aparecen en el marcado se van: una regla que no puede casar con nada solo estorba a quien lee la hoja. Se cargan en orden y **ese orden importa**: `01-base` (variables, reinicio, tipografía), `02-layout` (cabecera, sección, pie), `03-components` (piezas reutilizables), `04-sections` (cada sección de la página) y `05-hero3d` (la capa WebGL). Cada selector se declara una sola vez por capa y por consulta de medios; si hace falta un ajuste, va donde ya vive ese selector en lugar de en una hoja nueva al final.
 
 ### El JavaScript
 
@@ -93,8 +93,10 @@ Revisión visual: giro del hero en Chrome y Safari, cursor, recarga desde una se
 
 ## Publicación
 
-Se publica `public/` tal cual, sin build. El proyecto de Cloudflare Pages está conectado directamente al repositorio de GitHub: cada empujón a `main` dispara un despliegue automático (directorio de salida: `public/`, sin comando de build). Las rutas relativas admiten subdirectorios.
+Se publica `public/` tal cual, sin build. `wrangler.jsonc` define un Worker de Cloudflare que sirve `public/` como recursos estáticos (`assets.directory`), publicado en `antoniooliva.com` y `www.antoniooliva.com` como dominios propios. Las rutas relativas admiten subdirectorios.
 
-Con el dominio definitivo, configura `og:url`, `og:image` y `twitter:image` con URL absolutas en `index.html`. La imagen social es `public/assets/og.jpg` y su plantilla está en `design/og-card.html`.
+`og:url`, `og:image` y `twitter:image` ya son URL absolutas. La imagen social **no vive en el repositorio**: se sirve desde R2 (`pub-46192d9fcbf84443907c67d71cade960.r2.dev/og.jpg`). Si la regeneras, la plantilla es `design/og-card.html` y hay que volver a subirla a R2, porque cambiar el repositorio no la actualiza.
+
+De Draco solo está el descodificador: `hero3d.js` apunta con `setDecoderPath` a `vendor/three/addons/libs/draco/gltf/`, y el codificador —casi un mega— no lo pide nadie en tiempo de ejecución. Si actualizas Three.js, no vuelvas a copiarlo.
 
 Conserva las licencias de terceros en `public/vendor/` y `public/fonts/`.
