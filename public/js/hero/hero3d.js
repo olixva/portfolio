@@ -310,9 +310,14 @@ function start() {
       .to(tilt.rotation, { z: 0, duration: 0.9 }, 0.08)
       .to(stage.position, { x: pose.x, y: pose.y, duration: 0.9 }, 0.08)
       .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration: 0.9 }, 0.08)
-      .to(uniforms.uEnvironmentMix, { value: 1, duration: 0.8 }, 0.12)
-      .to(uniforms.uIntroProjection, { value: 0, duration: 0.08 }, 0)
-      .to(uniforms.uBaseMix, { value: 0.18, duration: 0.8 }, 0.12)
+      // La iluminacion pasa de dorada a verde DEBAJO de la proyeccion, que sigue
+      // entera: por eso existe, para que ese cambio no se vea ocurrir. Solo
+      // cuando ya ha terminado se levanta la proyeccion, y lo que aparece
+      // debajo es un modelo que ya esta en su color final. Si la proyeccion se
+      // va antes (como pasaba con 0.08s), se ve al modelo virar en directo.
+      .to(uniforms.uEnvironmentMix, { value: 1, duration: 0.5 }, 0)
+      .to(uniforms.uBaseMix, { value: 0.18, duration: 0.5 }, 0)
+      .to(uniforms.uIntroProjection, { value: 0, duration: 0.5 }, 0.3)
       .to(uniforms.uRim, { value: LOOK.rim, duration: 0.7 }, 0.2)
       .to(rim, { intensity: LOOK.rimLight, duration: 0.7 }, 0.2)
       .add(releaseContent, 0.4);
