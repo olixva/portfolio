@@ -1,0 +1,72 @@
+{
+  "marks": {
+    "video": 2.0,
+    "handoff": 2.71,
+    "gold": 3.2600000000000002,
+    "green": 3.8100000000000005,
+    "end": 5.16,
+    "total": 5.71
+  },
+  "variants": [
+    {
+      "id": 1,
+      "name": "ferrofluido",
+      "file": "01-ferrofluido.mp3",
+      "about": "Humedo y metalico, escuela T2: burbujas, succion y cristalizacion."
+    },
+    {
+      "id": 2,
+      "name": "trailer",
+      "file": "02-trailer.mp3",
+      "about": "Cine: subgrave, riser invertido, golpe en el relevo y floracion final."
+    },
+    {
+      "id": 3,
+      "name": "mercurio",
+      "file": "03-mercurio.mp3",
+      "about": "Solo agua y mercurio: gotas, viscosidad, chapoteo y efervescencia."
+    },
+    {
+      "id": 4,
+      "name": "analogico",
+      "file": "04-analogico.mp3",
+      "about": "Sintetizador clasico: sierras detune, barrido resonante y arpegio."
+    },
+    {
+      "id": 5,
+      "name": "cristal",
+      "file": "05-cristal.mp3",
+      "about": "Vidrio y campanas: limpio, luminoso, casi afinado."
+    },
+    {
+      "id": 6,
+      "name": "fragua",
+      "file": "06-fragua.mp3",
+      "about": "Industrial: retumbe, roce de metal, yunque y vapor."
+    },
+    {
+      "id": 7,
+      "name": "minimo",
+      "file": "07-minimo.mp3",
+      "about": "Casi musica: un acorde que se completa. Lo mas discreto."
+    },
+    {
+      "id": 8,
+      "name": "granular",
+      "file": "08-granular.mp3",
+      "about": "Glitch: granos, bitcrush y una rafaga de datos."
+    },
+    {
+      "id": 9,
+      "name": "aliento",
+      "file": "09-aliento.mp3",
+      "about": "Humano: inspirar, contener y soltar, con pulso debajo."
+    },
+    {
+      "id": 10,
+      "name": "espacio",
+      "file": "10-espacio.mp3",
+      "about": "Ambiente enorme: subgrave, paso doppler y un lavado que se evapora."
+    }
+  ]
+}

@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Sonido de la entrada</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#111210;color:#f1f2e9;font:14px/1.5 system-ui,sans-serif;
+  display:grid;grid-template-columns:minmax(0,1fr) 400px;min-height:100vh}
+main{padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+aside{background:#0d0e0c;border-left:1px solid #ffffff1f;padding:20px;overflow-y:auto;
+  max-height:100vh;box-sizing:border-box}
+h1{margin:0;font-size:15px;font-weight:500;letter-spacing:-.2px}
+p.help{margin:0;color:#9c9f94;font-size:12px}
+.stage{position:relative;flex:1;min-height:340px;border:1px solid #ffffff1f;border-radius:8px;
+  overflow:hidden;background:#000}
+.stage iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.stage.idle::after{content:'Pulsa una variante para lanzar la entrada';position:absolute;inset:0;
+  display:grid;place-items:center;color:#7e8375;font-size:13px}
+
+/* Linea de tiempo: las mismas marcas que hero3d.js. */
+.track{position:relative;height:52px;border:1px solid #ffffff1f;border-radius:6px;overflow:hidden;
+  background:#0d0e0c;flex:none}
+.track .phase{position:absolute;top:0;bottom:0;border-right:1px solid #ffffff26;
+  font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#8b9080;
+  padding:6px 0 0 8px;box-sizing:border-box;white-space:nowrap}
+.track .phase.rest{color:#5d6156;background:#ffffff08}
+.track .head{position:absolute;top:0;bottom:0;width:2px;background:#dcff54;left:0;
+  box-shadow:0 0 8px #dcff54;transform:translateX(-1px)}
+.track .head[hidden]{display:none}
+
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+li button{width:100%;text-align:left;display:grid;grid-template-columns:26px 1fr;gap:10px;
+  padding:10px 12px;border:1px solid #ffffff1f;border-radius:6px;background:#ffffff08}
+li button:hover{border-color:#ffffff40}
+li button[aria-current=true]{border-color:#dcff54;background:#dcff5414}
+li b{font-weight:500;display:block}
+li i{font-style:normal;color:#9c9f94;font-size:12px}
+li kbd{color:#dcff54;font:12px ui-monospace,Menlo,monospace;padding-top:2px}
+.row{display:flex;align-items:center;gap:10px;margin:16px 0 6px}
+.row label{color:#9c9f94;font-size:12px}
+input[type=range]{accent-color:#dcff54;flex:1}
+.ghost{border:1px solid #ffffff40;border-radius:100px;padding:7px 14px;font-size:12px}
+code{font:12px ui-monospace,Menlo,monospace;color:#dcff54}
+</style>
+</head>
+<body>
+<main>
+  <h1>Sonido de la entrada · banco de pruebas</h1>
+  <p class="help">Cada variante se lanza junto a la animación real: se recarga el hero y el audio
+  arranca cuando el vídeo empieza a reproducirse de verdad. Si el modelo tarda, la pista se
+  reengancha sola al empezar el relevo, así que lo que oyes va donde va.</p>
+  <div class="stage idle" id="stage"></div>
+  <div class="track" id="track"><span class="head" id="head" hidden></span></div>
+</main>
+<aside>
+  <ul id="list"></ul>
+  <div class="row">
+    <label for="vol">Volumen</label>
+    <input type="range" id="vol" min="0" max="1" step="0.01" value="0.8">
+  </div>
+  <div class="row">
+    <button class="ghost" id="stop">Parar</button>
+    <button class="ghost" id="solo">Solo audio</button>
+  </div>
+  <p class="help">Teclas <code>1</code>–<code>9</code>, <code>0</code> para la décima.
+  «Solo audio» reproduce la pista sin recargar el hero, para comparar rápido entre ellas.</p>
+</aside>
+
+<script type="module">
+const stage = document.getElementById('stage');
+const list = document.getElementById('list');
+const head = document.getElementById('head');
+const track = document.getElementById('track');
+const volume = document.getElementById('vol');
+
+const data = await fetch('audio/index.json').then(r => r.json());
+const M = data.marks;
+
+// Las fases son las del guion: gotas, rígido, giro, verde y el silencio.
+const PHASES = [
+  ['gotas', 0, M.video],
+  ['rígido', M.video, M.gold],
+  ['giro', M.gold, M.green],
+  ['verde', M.green, M.end],
+  ['reposo', M.end, M.total]
+];
+for (const [name, from, to] of PHASES) {
+  const el = document.createElement('span');
+  el.className = 'phase' + (name === 'reposo' ? ' rest' : '');
+  el.style.left = (from / M.total * 100) + '%';
+  el.style.width = ((to - from) / M.total * 100) + '%';
+  el.textContent = name;
+  track.append(el);
+}
+
+const audio = new Audio();
+audio.preload = 'auto';
+// Accesible desde la consola para depurar la sincronía a mano.
+window.heroSound = { audio, marks: M, variants: data.variants };
+audio.volume = +volume.value;
+volume.addEventListener('input', () => { audio.volume = +volume.value; });
+
+let current = null, watcher = null, clock = null;
+
+for (const v of data.variants) {
+  const li = document.createElement('li');
+  const button = document.createElement('button');
+  button.innerHTML = '<kbd>' + (v.id % 10) + '</kbd><span><b>' + v.name + '</b><i>'
+    + v.about + '</i></span>';
+  button.addEventListener('click', () => run(v));
+  li.append(button);
+  list.append(li);
+  v.button = button;
+}
+
+function mark(v) {
+  for (const other of data.variants) other.button.setAttribute('aria-current', String(other === v));
+  current = v;
+}
+
+// Un solo reloj para el cabezal. Con requestAnimationFrame se congela si la
+// pestaña pasa a segundo plano, y aquí lo que interesa es que siga marcando.
+function follow() {
+  clearInterval(clock);
+  clock = setInterval(() => {
+    head.hidden = audio.paused;
+    head.style.left = (Math.min(audio.currentTime, M.total) / M.total * 100) + '%';
+  }, 40);
+}
+
+function stop() {
+  audio.pause();
+  clearInterval(clock);
+  clearInterval(watcher);
+  head.hidden = true;
+}
+
+// Solo audio: sin recargar el hero, para comparar variantes seguidas.
+function play(v) {
+  stop();
+  mark(v);
+  audio.src = 'audio/' + v.file;
+  audio.currentTime = 0;
+  audio.play();
+  follow();
+}
+
+function run(v) {
+  stop();
+  mark(v);
+  audio.src = 'audio/' + v.file;
+  audio.load();
+
+  // El navegador solo deja sonar tras un gesto, y el play real llega después
+  // desde un temporizador: se desbloquea aquí, dentro del click.
+  audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(() => {});
+
+  // El hero solo hace la entrada una vez por carga, así que se recarga entero.
+  stage.classList.remove('idle');
+  stage.innerHTML = '';
+  const frameEl = document.createElement('iframe');
+  // Sin este permiso Chrome no deja que el vídeo del hero arranque solo dentro
+  // del iframe, y sin vídeo no hay instante al que engancharse.
+  frameEl.allow = 'autoplay';
+  frameEl.src = '../public/index.html?sound=' + v.id + '&t=' + Date.now();
+  stage.append(frameEl);
+
+  // Nada de esperar al load del iframe: ese evento llega cuando ya se han
+  // bajado el MP4 y el GLB, mas de un segundo tarde. Se sondea desde ya.
+  let started = false, resynced = false, rescued = false;
+  const armedAt = performance.now();
+  watcher = setInterval(() => {
+    let doc;
+    try { doc = frameEl.contentDocument; } catch (error) { doc = null; }
+    if (!doc) return;
+
+    // Primer acto: el reloj es el del video. Enganchar la pista a su
+    // currentTime la corrige sola, arranque tarde o se atasque el buffer.
+    const video = doc.querySelector('.ao-intro video');
+    // Algunos navegadores no dejan que el vídeo arranque solo dentro de un
+    // iframe ni con allow="autoplay". Se le da un empujón: el click de la
+    // variante sigue contando como gesto del usuario.
+    if (!rescued && video && video.paused && performance.now() - armedAt > 1200) {
+      rescued = true;
+      video.play().catch(() => {});
+    }
+    if (video && !video.paused && video.readyState >= 2) {
+      if (!started) {
+        started = true;
+        audio.play().catch(() => {});
+        follow();
+      }
+      if (!resynced && Math.abs(audio.currentTime - video.currentTime) > 0.08) {
+        audio.currentTime = video.currentTime;
+      }
+    }
+
+    // Segundo acto: no empieza al acabar el video sino cuando el modelo esta
+    // listo. hero3d marca ese instante con ao3d-revealing; a partir de ahi la
+    // pista corre sola porque ya no hay reloj externo al que agarrarse.
+    if (!resynced && doc.documentElement.classList.contains('ao3d-revealing')) {
+      resynced = true;
+      if (!started) { started = true; audio.play().catch(() => {}); follow(); }
+      if (Math.abs(audio.currentTime - M.video) > 0.12) audio.currentTime = M.video;
+    }
+
+    if (resynced && audio.ended) clearInterval(watcher);
+  }, 40);
+}
+
+document.getElementById('stop').addEventListener('click', stop);
+document.getElementById('solo').addEventListener('click', () => play(current || data.variants[0]));
+
+addEventListener('keydown', event => {
+  if (event.key === ' ') { event.preventDefault(); stop(); return; }
+  const n = event.key === '0' ? 10 : Number(event.key);
+  const v = data.variants.find(item => item.id === n);
+  if (v) run(v);
+});
+</script>
+</body>
+</html>
