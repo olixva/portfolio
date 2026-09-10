@@ -23,7 +23,7 @@ ATMOSPHERE = MODULE.parent / 'atmosphere.js'
 # El video y el modelo se piden desde JavaScript, no desde el HTML, y sus rutas
 # se resuelven contra la pagina: tanto fetch() como el cargador de GLTF usan la
 # URL del documento como base, no la del modulo que los pide.
-ASSETS = r'(?P<path>assets/[\w.-]+\.(?:mp4|glb|webm|webp|jpg|png|svg))(\?v=[0-9a-f]+)?'
+ASSETS = r'(?P<path>assets/[\w.-]+\.(?:mp4|glb|webm|webp|jpg|png|svg|mp3))(\?v=[0-9a-f]+)?'
 IMPORTS = r'(?P<path>\./[\w.-]+\.js)(\?v=[0-9a-f]+)?'
 PAGE_REFS = r'(?P<path>(?:css|js)/[\w./-]+\.(?:css|js))(\?v=[0-9a-f]+)?'
 

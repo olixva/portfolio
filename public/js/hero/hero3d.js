@@ -14,6 +14,17 @@ import { createAtmosphere } from './atmosphere.js?v=0a9f5880';
 import { prepareIntro } from './intro.js?v=2c56723e';
 
 const MODEL = 'assets/ao-sculpture.glb?v=e9ab29ff';
+const SOUND = 'assets/hero-intro.mp3?v=0cc021f4';
+
+// La subida dura lo mismo en móvil y escritorio para que la pista encaje en
+// los dos. Toda la secuencia posterior cuelga de aquí.
+const INTRO_RISE = 1.1;
+// Instante, contado desde que arranca el vídeo, en que la pista tiene que
+// estar en cada sitio. El vídeo dura 2 s, pero el segundo acto no empieza al
+// acabarlo: espera al modelo. Por eso la pista se recoloca en el relevo.
+const SOUND_HANDOFF = 2.0;
+// Longitud de la pista. Pasada esta marca no hay nada que acompañar.
+const SOUND_LENGTH = 5.71;
 
 const root = document.documentElement;
 const hero = document.querySelector('.hero');
@@ -24,6 +35,84 @@ const isMobile = () => innerWidth <= 760;
 const wantsIntro = root.classList.contains('ao3d-intro');
 
 const releaseContent = () => root.classList.remove('ao3d-intro');
+
+// --- Sonido de la entrada -----------------------------------------------
+// Autoarranque a secas: sin botón ni ningún otro adorno. Un interruptor no
+// sirve de nada aquí, porque para cuando lo pulsas la entrada ya ha pasado.
+//
+// El límite es del navegador, no del código: sin un gesto previo del usuario
+// nadie deja sonar audio. Chrome sí lo permite cuando el visitante ya ha
+// reproducido medios en el dominio, y ahí entra solo. Cuando lo rechaza, la
+// única salida es el primer gesto que haga el usuario, y entonces la pista
+// entra POR DONDE TOCA, no desde el principio: llegar tarde y sonar desfasado
+// sería peor que callar.
+function createSound() {
+  if (!wantsIntro) return null;
+  const audio = new Audio(SOUND);
+  audio.preload = 'auto';
+  audio.volume = 0.7;
+  // Ancla: posición de la pista y momento real en que le correspondía estar
+  // ahí. Con las dos se deduce dónde debería ir en cualquier instante.
+  let anchor = null, waiting = false, dead = false, holding = 0;
+
+  const at = () => anchor ? anchor.t + (performance.now() - anchor.at) / 1000 : 0;
+
+  // Al primer intento que cuaja se sueltan los escuchadores de gesto: si no,
+  // un clic posterior recolocaría una pista que ya va bien.
+  const attempt = () => {
+    audio.play().then(() => release()).catch(() => rescue());
+  };
+
+  // Solo estos eventos conceden activación al usuario: mover el ratón o hacer
+  // scroll no cuenta, por mucho que lo parezca.
+  const GESTURES = ['pointerdown', 'keydown', 'touchend'];
+  const onGesture = () => {
+    release();
+    if (dead) return;
+    const t = at();
+    if (t >= SOUND_LENGTH) return;   // ya no queda entrada que acompañar
+    audio.currentTime = t;
+    audio.play().catch(() => {});
+  };
+  const release = () => {
+    if (!waiting) return;
+    waiting = false;
+    for (const type of GESTURES) removeEventListener(type, onGesture);
+  };
+  const rescue = () => {
+    if (waiting || dead) return;
+    waiting = true;
+    for (const type of GESTURES) addEventListener(type, onGesture, { once: true, passive: true });
+  };
+
+  return {
+    // t = segundos desde que arranca el vídeo. Se recoloca en cada hito en vez
+    // de dejarla correr sola: el segundo acto espera al modelo y no siempre
+    // empieza en el mismo instante.
+    start(t = 0) {
+      clearTimeout(holding);
+      anchor = { t, at: performance.now() };
+      if (Math.abs(audio.currentTime - t) > 0.12) audio.currentTime = t;
+      attempt();
+    },
+    // Al acabar el vídeo la imagen se queda congelada en su último fotograma
+    // hasta que el modelo está montado: unos 300 ms, y variables. La pista
+    // espera ahí en vez de seguir y tener que saltar hacia atrás después, que
+    // se oye como un tartamudeo.
+    hold() {
+      if (dead) return;
+      clearTimeout(holding);
+      const left = (SOUND_HANDOFF - audio.currentTime) * 1000;
+      holding = setTimeout(() => audio.pause(), Math.max(0, left));
+    },
+    stop() {
+      dead = true;
+      clearTimeout(holding);
+      release();
+      audio.pause();
+    }
+  };
+}
 
 // --- Escena -------------------------------------------------------------
 
@@ -157,6 +246,11 @@ function start() {
   }
 
   let introFrame = null;
+  const sound = createSound();
+  // El reloj de la pista es el vídeo, no la carga: hasta que no pinta el primer
+  // fotograma no hay nada con lo que sincronizar.
+  intro?.video.addEventListener('playing', () => sound?.start(intro.video.currentTime));
+  intro?.video.addEventListener('ended', () => sound?.hold());
   const { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms, handoff, atmosphere } = ctx;
   let framePose = null;
   let readyForHandoff = false;
@@ -353,10 +447,13 @@ function start() {
     releaseContent();
   }
 
+  // Saltarse la entrada calla la pista. Terminarla no: lo que queda es cola de
+  // reverb sobre el reposo y cortarla en seco se nota más que dejarla morir.
+  const skipIntro = () => { sound?.stop(); finishIntro(); };
   document.querySelector('.header')?.addEventListener('click', event => {
-    if (introRunning && event.target.closest('a')) finishIntro();
+    if (introRunning && event.target.closest('a')) skipIntro();
   });
-  document.querySelector('.skip')?.addEventListener('click', () => { if (introRunning) finishIntro(); });
+  document.querySelector('.skip')?.addEventListener('click', () => { if (introRunning) skipIntro(); });
 
   async function runIntro() {
     if (!intro) { applyRest(); releaseContent(); return; }
@@ -399,10 +496,14 @@ function start() {
     intro.video.style.opacity = '1';
     transitioning = true;
     root.classList.add('ao3d-revealing');
+    sound?.start(SOUND_HANDOFF);
     const pose = restPose(camera, rect.height);
     // Una sola trayectoria controla el fotograma y la pieza. El metal conserva
     // su cuerpo mientras sube; el relevo sucede al desacelerar, ya junto al título.
-    const duration = isMobile() ? 1.25 : 1.1;
+    // Misma duración en móvil que en escritorio: la pista de sonido es una sola
+    // y tiene que caer en el mismo fotograma en los dos. Antes móvil subía en
+    // 1.25 s y toda la secuencia posterior se iba 150 ms.
+    const duration = INTRO_RISE;
     // Funde las dos superficies antes de moverlas: el vídeo
     // y WebGL redondean de forma distinta los bordes de los reflejos.
     const transfer = 0.16;
