@@ -10,7 +10,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=9ecd0025';
 
-import { createAtmosphere } from './atmosphere.js?v=d8666af5';
+import { createAtmosphere } from './atmosphere.js?v=0a9f5880';
 import { prepareIntro } from './intro.js?v=2c56723e';
 
 const MODEL = 'assets/ao-sculpture.glb?v=e9ab29ff';
@@ -108,9 +108,9 @@ function createScene(canvas) {
   composer.addPass(handoff);
 
   const atmosphere = createAtmosphere({
-    scene, stage, mobile: isMobile(), reduceMotion: reduceMotion.matches
+    scene, mobile: isMobile(), reduceMotion: reduceMotion.matches
   });
-  // Sin intro la pieza ya esta en su sitio, asi que el humo entra con ella.
+  // Sin intro la pieza ya esta en su sitio, asi que las particulas entran con ella.
   atmosphere.intensity.value = wantsIntro ? 0 : 1;
 
   return { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms, handoff, atmosphere };
@@ -259,7 +259,8 @@ function start() {
       const back = 1 - Math.pow(0.12, delta);
       let targetY, targetX;
       if (isMobile()) {
-        const autoY = Math.sin(time * 0.157) * 1.57;
+        // Mantiene una vuelta continua: la pieza no rebota entre dos extremos.
+        const autoY = time * 0.18;
         targetY = autoY * interaction.value + drag.yaw;
         targetX = scrollTilt * interaction.value + drag.pitch;
       } else {
@@ -282,7 +283,7 @@ function start() {
       spinRate.x = (tilt.rotation.x - beforeX) / Math.max(delta, 0.001);
     }
 
-    atmosphere.update(delta, clock.elapsedTime, spinRate, stage.position, drag.on);
+    atmosphere.update(delta, clock.elapsedTime, spinRate, stage.position, stage.scale.x);
     composer.render();
     if (visible) frame = requestAnimationFrame(tick);
   }
@@ -550,6 +551,7 @@ function start() {
       if (target?.closest('a,button,summary,input,textarea,[role="button"]')) return;
       event.preventDefault();   // si no, arrastrar sobre el titular lo selecciona
       drag.on = true; drag.id = event.pointerId;
+      if (isMobile()) drag.yaw = tilt.rotation.y - (clock.elapsedTime - settledAt) * 0.18;
       press = { x: event.clientX, y: event.clientY, time: performance.now(), moved: false };
       airPointer(event);
       drag.x = event.clientX; drag.y = event.clientY;
@@ -560,9 +562,10 @@ function start() {
       if (!introRunning && (event.pointerType !== 'touch' || drag.on)) airPointer(event);
       if (!drag.on || event.pointerId !== drag.id) return;
       if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 7) press.moved = true;
-      drag.yaw += (event.clientX - drag.x) * 0.007;
-      drag.pitch += (event.clientY - drag.y) * 0.007;
-      drag.pitch = Math.max(-0.9, Math.min(0.9, drag.pitch));
+      const dragScale = isMobile() ? 0.009 : 0.007;
+      drag.yaw += (event.clientX - drag.x) * dragScale;
+      drag.pitch += (event.clientY - drag.y) * dragScale;
+      drag.pitch = Math.max(isMobile() ? -1.05 : -0.9, Math.min(isMobile() ? 1.05 : 0.9, drag.pitch));
       drag.x = event.clientX; drag.y = event.clientY;
       play();
     });

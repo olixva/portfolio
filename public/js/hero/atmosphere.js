@@ -1,37 +1,8 @@
-// Atmósfera independiente: la escultura emite y desplaza aire cercano.
+// Partículas independientes: la escultura emite y desplaza fragmentos cercanos.
 // El movimiento vive en atmosphere-motion; aquí solo se dibuja.
 import * as THREE from 'three';
-import { createAirMotion } from './atmosphere-motion.js?v=042b18e7';
+import { createAirMotion } from './atmosphere-motion.js?v=81651304';
 
-const SMOKE_VERTEX = `
-  varying vec2 vUv;
-  void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`;
-const SMOKE_FRAGMENT = `
-  uniform float uTime, uOpacity, uSeed;
-  uniform vec2 uFlow;
-  varying vec2 vUv;
-  float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1,311.7))) * 43758.5453); }
-  float noise(vec2 p) {
-    vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
-    return mix(mix(hash(i),hash(i+vec2(1,0)),f.x), mix(hash(i+vec2(0,1)),hash(i+vec2(1)),f.x),f.y);
-  }
-  float fbm(vec2 p) {
-    float n = 0.0, a = 0.5;
-    for(int i=0;i<4;i++) { n += noise(p)*a; p = p*2.03+vec2(3.1,1.7); a *= 0.5; }
-    return n;
-  }
-  void main() {
-    vec2 p = vUv - 0.5;
-    p += uFlow * (noise(p*5.0+uSeed)-0.5) * exp(-dot(p,p)*8.0);
-    vec2 q = p*4.0+uSeed+vec2(uTime*0.013,-uTime*0.021);
-    float n = fbm(q+vec2(fbm(q*1.3),fbm(q*1.3+7.0))*1.4);
-    float mask = 1.0-smoothstep(0.14,0.5,length(p));
-    float alpha = smoothstep(0.3,0.8,n)*mask*mask*uOpacity;
-    if(alpha<0.001) discard;
-    // Gris oliva muy tenue; el verde solo se insinúa en las zonas densas.
-    vec3 color = mix(vec3(0.12,0.135,0.105),vec3(0.23,0.28,0.13),n*n);
-    gl_FragColor = vec4(color,alpha);
-  }`;
 const PARTICLE_VERTEX = `
   uniform float uTime, uIntensity, uPixelRatio, uRadius;
   uniform vec2 uFocus;
@@ -62,10 +33,9 @@ const PARTICLE_FRAGMENT = `
     gl_FragColor = vec4(color,alpha);
   }`;
 
-export function createAtmosphere({ scene, stage, mobile = false, reduceMotion = false }) {
+export function createAtmosphere({ scene, mobile = false, reduceMotion = false }) {
   const intensity = { value: 0 };
-  // Prueba visual sin humo: conserva únicamente las partículas.
-  const motion = createAirMotion({ count: reduceMotion ? 28 : (mobile ? 52 : 110), cloudCount: 0 });
+  const motion = createAirMotion({ count: reduceMotion ? 28 : (mobile ? 52 : 110) });
   const pointer = { x: 0, y: 0, vx: 0, vy: 0, active: false };
   const target = { x: 0, y: 0, active: false };
   let pointerInitialized = false;
@@ -73,17 +43,6 @@ export function createAtmosphere({ scene, stage, mobile = false, reduceMotion = 
   const group = new THREE.Group();
   group.name = 'hero-atmosphere';
   scene.add(group);
-  const smokeGeometry = new THREE.PlaneGeometry(1,1);
-  const smoke = motion.clouds.map(cloud => {
-    const mesh = new THREE.Mesh(smokeGeometry, new THREE.ShaderMaterial({
-      vertexShader: SMOKE_VERTEX, fragmentShader: SMOKE_FRAGMENT,
-      uniforms: { uTime: time, uSeed: { value: cloud.seed }, uFlow: { value: new THREE.Vector2() }, uOpacity: { value: 0 } },
-      transparent: true, depthWrite: false
-    }));
-    mesh.frustumCulled = false;
-    group.add(mesh);
-    return mesh;
-  });
   const positions = new Float32Array(motion.bodies.length*3);
   const ages = new Float32Array(motion.bodies.length);
   const emission = { value: 0 };
@@ -138,9 +97,9 @@ export function createAtmosphere({ scene, stage, mobile = false, reduceMotion = 
       target.x=x; target.y=y; target.active=active;
       if (!active) pointerInitialized=false;
     },
-    burst(x,y) { if(!reduceMotion) motion.burst(x,y,stage.scale.x*1.1); },
-    update(delta,elapsed,spin={x:0,y:0},focus=stage.position,dragging=false) {
-      const radius = Math.max(0.08,stage.scale.x);
+    burst(x,y) { if(!reduceMotion) motion.burst(x,y,1.1); },
+    update(delta,elapsed,spin={x:0,y:0},focus={x:0,y:0},radius=1) {
+      radius = Math.max(0.08,radius);
       material.uniforms.uFocus.value.set(focus.x,focus.y);
       material.uniforms.uRadius.value=radius;
       time.value=reduceMotion?0:elapsed;
@@ -151,7 +110,6 @@ export function createAtmosphere({ scene, stage, mobile = false, reduceMotion = 
         pointerInitialized=true;
       }
       pointer.active=target.active && !reduceMotion;
-      pointer.dragging=dragging;
       if (emitter) {
         emitter.model.updateWorldMatrix(true,true);
         emitter.anchors.forEach((anchor,i) => {
@@ -170,18 +128,8 @@ export function createAtmosphere({ scene, stage, mobile = false, reduceMotion = 
       }
       geometry.attributes.position.needsUpdate=true;
       geometry.attributes.aAge.needsUpdate=true;
-      for(let i=0;i<smoke.length;i++) {
-        const cloud=motion.clouds[i], mesh=smoke[i];
-        mesh.position.set(cloud.x,cloud.y,cloud.z);
-        const scale=cloud.size*(1+cloud.age*0.95);
-        mesh.scale.set(scale*1.4,scale,1);
-        mesh.material.uniforms.uFlow.value.set(cloud.flowX,cloud.flowY);
-        mesh.material.uniforms.uOpacity.value=intensity.value*Math.sin(Math.PI*cloud.age)**2*(cloud.z>0?0.12:0.4);
-      }
     },
     dispose() {
-      smokeGeometry.dispose();
-      smoke.forEach(mesh=>mesh.material.dispose());
       geometry.dispose(); material.dispose(); group.removeFromParent();
     }
   };
