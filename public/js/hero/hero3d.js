@@ -11,7 +11,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ACID, LOOK, GOLD_ENV, SITE_ENV, buildEnvironment, applySteel, applyTransition, makeUniforms } from './sculpture.js?v=0f0886b3';
 
 import { createAtmosphere } from './atmosphere.js?v=0a9f5880';
-import { prepareIntro } from './intro.js?v=2c56723e';
+import { prepareIntro } from './intro.js?v=3a380226';
 
 const MODEL = 'assets/ao-sculpture.glb?v=e9ab29ff';
 const SOUND = 'assets/hero-intro.mp3?v=0cc021f4';
@@ -53,7 +53,11 @@ function createSound() {
   audio.volume = 0.7;
   // Ancla: posición de la pista y momento real en que le correspondía estar
   // ahí. Con las dos se deduce dónde debería ir en cualquier instante.
-  let anchor = null, waiting = false, dead = false, holding = 0;
+  // `past` es la regla, no un detalle: en cuanto arranca el segundo acto ya no
+  // hay nada que esperar. Sin ella, el `ended` del vídeo puede llegar después
+  // del relevo, programar una pausa que nadie limpia y dejar la pista muda de
+  // ahí al final: sin solidificación, sin giro y sin chispas.
+  let anchor = null, waiting = false, dead = false, holding = 0, past = false;
 
   const at = () => anchor ? anchor.t + (performance.now() - anchor.at) / 1000 : 0;
 
@@ -91,6 +95,7 @@ function createSound() {
     // empieza en el mismo instante.
     start(t = 0) {
       clearTimeout(holding);
+      if (t >= SOUND_HANDOFF) past = true;
       anchor = { t, at: performance.now() };
       if (Math.abs(audio.currentTime - t) > 0.12) audio.currentTime = t;
       attempt();
@@ -100,7 +105,7 @@ function createSound() {
     // espera ahí en vez de seguir y tener que saltar hacia atrás después, que
     // se oye como un tartamudeo.
     hold() {
-      if (dead) return;
+      if (dead || past) return;
       clearTimeout(holding);
       const left = (SOUND_HANDOFF - audio.currentTime) * 1000;
       holding = setTimeout(() => audio.pause(), Math.max(0, left));
@@ -249,6 +254,10 @@ function start() {
   const sound = createSound();
   // El reloj de la pista es el vídeo, no la carga: hasta que no pinta el primer
   // fotograma no hay nada con lo que sincronizar.
+  // La pista arranca dentro del click que abre la puerta, no en un evento
+  // posterior: es la unica forma de que el navegador la deje sonar al primer
+  // intento. El vídeo empieza en el mismo click, así que las dos van a la par.
+  intro?.onEnter(() => sound?.start(0));
   intro?.video.addEventListener('playing', () => sound?.start(intro.video.currentTime));
   intro?.video.addEventListener('ended', () => sound?.hold());
   const { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms, handoff, atmosphere } = ctx;
@@ -473,6 +482,7 @@ function start() {
     composer.render();
     handoff.enabled = false;
     readyForHandoff = true;
+    intro.ready('model');
     await intro.ended;
     await document.fonts.ready;
     if (!introRunning) return;
@@ -531,10 +541,18 @@ function start() {
   }
 
   const draco = new DRACOLoader().setDecoderPath('vendor/three/addons/libs/draco/gltf/');
-  const modelTimeout = setTimeout(() => {
+  const giveUp = () => {
     finishIntro();
     if (!model) { canvas.style.opacity = '0'; root.classList.remove('ao3d-pending'); }
-  }, 45000);
+  };
+  let modelTimeout = setTimeout(giveUp, 45000);
+  // La cuenta atras vigila un modelo que no llega, no lo que tarde el visitante
+  // en pulsar: al abrir la puerta se reinicia, y si la escultura ya está no se
+  // vuelve a armar porque no queda nada que vigilar.
+  intro?.onEnter(() => {
+    clearTimeout(modelTimeout);
+    if (!model) modelTimeout = setTimeout(giveUp, 45000);
+  });
   new GLTFLoader().setDRACOLoader(draco).load(MODEL, gltf => {
     if (!intro) clearTimeout(modelTimeout);
     model = gltf.scene;
@@ -647,6 +665,7 @@ function start() {
     else { canvas.style.opacity = '1'; releaseContent(); }
   }, undefined, error => {
     clearTimeout(modelTimeout);
+    intro?.ready('model');
     draco.dispose();
     console.warn('No se pudo cargar la escultura, se usa el fallback CSS:', error);
     intro?.dispose();

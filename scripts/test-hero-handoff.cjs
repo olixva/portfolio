@@ -3,6 +3,7 @@
 const { chromium } = require('playwright');
 const { PNG } = require('pngjs');
 const assert = require('node:assert/strict');
+const openGate = require('./open-gate.cjs');
 function sculptureBounds(png, bottom = png.height) {
   let left = png.width, right = 0;
   for (let y = 80; y < bottom; y++) for (let x = 0; x < png.width; x++) {
@@ -27,6 +28,7 @@ function sculptureBounds(png, bottom = png.height) {
         await route.fulfill({ response, body });
       });
       await page.goto(process.argv[2] || 'http://localhost:8000', { waitUntil: 'domcontentloaded' });
+      await openGate(page);
       await page.waitForFunction(() => !!window.handoff?.timeline);
       await page.evaluate(() => {
         document.querySelector('.ao3d-canvas').style.opacity = '0';

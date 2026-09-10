@@ -55,3 +55,93 @@ html.ao3d-intro:not(.ao3d-revealing) body:before{content:"";position:fixed;inset
    el relevo lo lleva desde ahi hasta la banda de la escultura. Con movimiento
    reducido la regla de arriba manda y el video sigue en la banda, como antes. */
 @media(max-width:760px) and (prefers-reduced-motion:no-preference){.ao-intro video{top:50%}}
+
+/* --- Puerta de entrada --------------------------------------------------
+   Existe solo si hay entrada que ver: con prefers-reduced-motion o sin WebGL
+   la IIFE de index.html no pone ao3d-intro y aqui no se pinta nada. Sirve para
+   dos cosas a la vez: cargar el video, el modelo y las fuentes por detras, y
+   conseguir el gesto del usuario, sin el cual ningun navegador deja sonar
+   audio. */
+.ao-gate{display:none}
+.ao3d-intro .ao-gate{
+  display:grid;place-items:center;position:fixed;inset:0;z-index:90;
+  background:var(--dark);
+  transition:opacity .6s ease,visibility .6s;
+}
+.ao-gate.is-open{opacity:0;visibility:hidden;pointer-events:none}
+
+/* Un resplandor acido muy tenue que respira: da vida al negro sin hacer ruido. */
+.ao-gate-glow{
+  position:absolute;inset:0;pointer-events:none;
+  /* Ceñido al centro y muy bajo: abierto y a mas opacidad, el acido lo tinta
+     todo y el negro se vuelve un verde sucio. */
+  background:radial-gradient(26% 30% at 50% 55%,#dcff5414,transparent 72%);
+  animation:gate-breathe 7s ease-in-out infinite;
+}
+.ao-gate-inner{position:relative;display:grid;justify-items:center;text-align:center;padding:24px}
+.ao-gate-mark{
+  font-size:44px;font-weight:500;letter-spacing:-.06em;line-height:1;
+  animation:gate-in .9s cubic-bezier(.2,.8,.2,1) both;
+}
+.ao-gate-mark span{color:var(--acid)}
+.ao-gate-name{
+  margin:14px 0 0;font-size:11px;letter-spacing:.28em;text-transform:uppercase;
+  color:var(--muted);animation:gate-in .9s .08s cubic-bezier(.2,.8,.2,1) both;
+}
+
+.ao-gate-enter{
+  position:relative;display:grid;place-items:center;margin:46px 0 0;
+  width:150px;height:150px;padding:0;border:0;border-radius:50%;
+  background:none;color:var(--paper);font:inherit;cursor:pointer;
+  animation:gate-in 1s .16s cubic-bezier(.2,.8,.2,1) both;
+}
+.ao-gate-enter[disabled]{cursor:progress;color:var(--muted)}
+.ao-gate-ring{
+  position:absolute;inset:0;border-radius:50%;
+  border:1px solid #ffffff2e;
+  transition:border-color .35s ease,transform .35s cubic-bezier(.2,.8,.2,1),background .35s ease;
+}
+/* Mientras carga, el aro gira partido: se ve que hay algo en marcha. */
+.ao-gate-enter[disabled] .ao-gate-ring{
+  border-color:#ffffff1a;border-top-color:#dcff5480;animation:gate-spin 1.1s linear infinite;
+}
+/* Listo: el aro late para pedir el clic. */
+.ao-gate-enter:not([disabled]) .ao-gate-ring{
+  border-color:#dcff5459;animation:gate-pulse 2.6s ease-out infinite;
+}
+.ao-gate-enter:not([disabled]):hover .ao-gate-ring,
+.ao-gate-enter:not([disabled]):focus-visible .ao-gate-ring{
+  background:var(--acid);border-color:var(--acid);animation:none;transform:scale(1.04);
+}
+.ao-gate-enter:not([disabled]):hover .ao-gate-label,
+.ao-gate-enter:not([disabled]):focus-visible .ao-gate-label{color:var(--dark)}
+.ao-gate-enter:focus-visible{outline:none}
+.ao-gate-enter:not([disabled]):active .ao-gate-ring{transform:scale(.98)}
+.ao-gate-label{
+  position:relative;font-size:14px;letter-spacing:.16em;text-transform:uppercase;
+  transition:color .35s ease;
+}
+.ao-gate-hint{
+  display:flex;align-items:center;gap:7px;margin:26px 0 0;
+  font-size:12px;letter-spacing:.1em;color:var(--muted);
+  animation:gate-in 1s .24s cubic-bezier(.2,.8,.2,1) both;
+}
+.ao-gate-hint svg{width:15px;height:15px}
+
+@keyframes gate-in{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+@keyframes gate-spin{to{transform:rotate(360deg)}}
+@keyframes gate-breathe{0%,100%{opacity:.5}50%{opacity:.95}}
+/* El latido sale del aro hacia fuera y se apaga: invita sin dar saltos. */
+@keyframes gate-pulse{
+  0%{box-shadow:0 0 0 0 #dcff5433}
+  70%{box-shadow:0 0 0 26px #dcff5400}
+  100%{box-shadow:0 0 0 0 #dcff5400}
+}
+@media(max-width:760px){
+  .ao-gate-mark{font-size:36px}
+  .ao-gate-enter{width:132px;height:132px;margin-top:38px}
+}
+@media(prefers-reduced-motion:reduce){
+  .ao-gate-glow,.ao-gate-mark,.ao-gate-name,.ao-gate-enter,.ao-gate-hint,
+  .ao-gate-enter .ao-gate-ring{animation:none}
+}

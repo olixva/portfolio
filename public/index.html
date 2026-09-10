@@ -25,7 +25,7 @@
 <link rel="stylesheet" href="css/02-layout.css?v=30022cec">
 <link rel="stylesheet" href="css/03-components.css?v=903a62b6">
 <link rel="stylesheet" href="css/04-sections.css?v=9f347142">
-<link rel="stylesheet" href="css/05-hero3d.css?v=a43f70b7">
+<link rel="stylesheet" href="css/05-hero3d.css?v=4d4f71fb">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <script type="importmap">
 {"imports":{"three":"./vendor/three/three.module.min.js","three/addons/":"./vendor/three/addons/"}}
@@ -74,6 +74,24 @@
 </defs></svg>
 <a class="skip" href="#main">Saltar al contenido</a>
 <div class="reading-progress" aria-hidden="true"></div>
+<!-- Puerta de entrada. Va en el HTML y no la crea el JS para que pinte en el
+     primer fotograma: si apareciera despues, se veria un salto. Solo se muestra
+     cuando hay entrada que ver, y de eso se encarga el CSS con .ao3d-intro. -->
+<div class="ao-gate" id="ao-gate">
+  <div class="ao-gate-glow" aria-hidden="true"></div>
+  <div class="ao-gate-inner">
+    <span class="ao-gate-mark" aria-hidden="true">ao<span>/</span></span>
+    <p class="ao-gate-name">Antonio Oliva Cárceles</p>
+    <button class="ao-gate-enter" type="button" id="ao-gate-enter" disabled>
+      <span class="ao-gate-ring" aria-hidden="true"></span>
+      <span class="ao-gate-label">Cargando</span>
+    </button>
+    <p class="ao-gate-hint">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M4 9h3l4-3.5v13L7 15H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1Z"/><path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" d="M15.5 9.5a3.5 3.5 0 0 1 0 5M18 7a7 7 0 0 1 0 10"/></svg>
+      Con sonido
+    </p>
+  </div>
+</div>
 <header class="header"><a class="brand" href="#inicio" aria-label="Antonio Oliva, inicio">ao<span>/</span></a><span class="header-name">Antonio Oliva Cárceles</span><nav aria-label="Navegación principal"><a href="#hackathons">Hackathons</a><a href="#sobre-mi">Sobre mí</a><a href="#experiencia">Experiencia</a><a href="#formacion">Formación</a><a class="nav-contact" href="#contacto">Hablemos</a></nav><details class="mobile-nav"><summary>Menú</summary><nav aria-label="Navegación móvil"><a href="#hackathons">Hackathons</a><a href="#sobre-mi">Sobre mí</a><a href="#experiencia">Experiencia</a><a href="#formacion">Formación</a><a class="nav-contact" href="#contacto">Hablemos</a></nav></details></header>
 <main id="main">
 <section class="hero" id="inicio">
@@ -120,6 +138,6 @@
 <div class="contact-social"><p class="contact-label">En la red</p><div class="social-links"><a class="social-link social-linkedin" href="https://www.linkedin.com/in/antonio-oliva-carceles" target="_blank" rel="noopener noreferrer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-linkedin"></use></svg><span>LinkedIn<small>Lo que comparto</small></span></a><a class="social-link social-github" href="https://github.com/olixva" target="_blank" rel="noopener noreferrer"><svg class="brand-icon" viewBox="0 0 24 24" aria-hidden="true"><use href="#icon-github"></use></svg><span>GitHub<small>Lo que construyo</small></span></a></div></div></div></section>
 </main><footer><a class="brand" href="#inicio" aria-label="Volver al inicio">ao<span>/</span></a><span>© <span id="year">2026</span> Antonio Oliva Cárceles</span><a href="#inicio">Volver arriba</a></footer>
 <script src="vendor/gsap.min.js" defer></script>
-<script type="module" src="js/hero/intro.js?v=2c56723e"></script>
-<script type="module" src="js/hero/hero3d.js?v=35593b5e"></script>
+<script type="module" src="js/hero/intro.js?v=3a380226"></script>
+<script type="module" src="js/hero/hero3d.js?v=451e66b6"></script>
 <script src="js/main.js?v=5442826c" defer></script><script src="js/ui.js?v=b46c8e12" defer></script><script src="js/cursor.js?v=2e013b00" defer></script></body></html>

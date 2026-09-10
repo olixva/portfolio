@@ -1,11 +1,13 @@
 const { chromium } = require('playwright');
 const assert = require('node:assert/strict');
+const openGate = require('./open-gate.cjs');
 (async () => {
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   try {
     for (const [width, height] of [[1440, 900], [1920, 1080], [2560, 1440], [390, 844]]) {
       const page = await browser.newPage({ viewport: { width, height } });
       await page.goto(process.argv[2] || 'http://localhost:8000', { waitUntil: 'domcontentloaded' });
+      await openGate(page);
       await page.waitForSelector('.ao-intro.is-playing');
       const first = await page.evaluate(() => ({
         heroBottom: document.querySelector('.hero').getBoundingClientRect().bottom,

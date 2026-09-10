@@ -1,11 +1,13 @@
 const { webkit, devices } = require('playwright');
 const assert = require('node:assert/strict');
+const openGate = require('./open-gate.cjs');
 (async () => {
   const browser = await webkit.launch({ headless: true });
   try {
     for (const [width, height] of [[375,667],[390,844],[360,640],[320,568],[430,932],[844,390]]) {
       const page = await browser.newPage({ ...devices['iPhone 13'], viewport: { width, height }, deviceScaleFactor: 1 });
       await page.goto(process.argv[2] || 'http://localhost:8000', { waitUntil: 'domcontentloaded' });
+      await openGate(page);
       await page.waitForSelector('.ao-intro', { state: 'detached' });
       const box = await page.evaluate(() => {
         const rect = selector => document.querySelector(selector).getBoundingClientRect().toJSON();
