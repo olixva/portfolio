@@ -18,6 +18,7 @@ PAGE = PUBLIC / 'index.html'
 # no llega al navegador porque el modulo que lo trae no ha cambiado de nombre.
 MODULE = PUBLIC / 'js' / 'hero' / 'hero3d.js'
 INTRO = PUBLIC / 'js' / 'hero' / 'intro.js'
+ATMOSPHERE = MODULE.parent / 'atmosphere.js'
 
 # El video y el modelo se piden desde JavaScript, no desde el HTML, y sus rutas
 # se resuelven contra la pagina: tanto fetch() como el cargador de GLTF usan la
@@ -61,6 +62,8 @@ def stamp(write=True):
     # 1. intro.js apunta al video; 2. hero3d.js al modelo y ademas importa a
     # intro.js, que acaba de cambiar; 3. la pagina, a todo lo anterior.
     seal(INTRO, [(PUBLIC, ASSETS)])
+    if ATMOSPHERE.exists():
+        seal(ATMOSPHERE, [(ATMOSPHERE.parent, IMPORTS)])
     seal(MODULE, [(PUBLIC, ASSETS), (MODULE.parent, IMPORTS)])
     seal(PAGE, [(PUBLIC, PAGE_REFS)])
     return stale

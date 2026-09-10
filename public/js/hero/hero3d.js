@@ -10,6 +10,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=9ecd0025';
 
+import { createAtmosphere } from './atmosphere.js?v=ea1a3486';
 import { prepareIntro } from './intro.js?v=2c56723e';
 
 const MODEL = 'assets/ao-sculpture.glb?v=e9ab29ff';
@@ -32,7 +33,7 @@ function createScene(canvas) {
   });
   // Fondo transparente para integrar la escena en el hero.
   renderer.setClearColor(0x000000, 0);
-  renderer.setPixelRatio(Math.min(devicePixelRatio, isMobile() ? 1.5 : 2));
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = LOOK.exposure;
 
@@ -67,6 +68,11 @@ function createScene(canvas) {
 
   // Buffers HDR estándar para el postprocesado.
   const composer = new EffectComposer(renderer);
+  // El antialias del canvas no alcanza los buffers del composer.
+  // MSAA suaviza la silueta y los filamentos sin difuminar los reflejos.
+  const samples = Math.min(renderer.capabilities.maxSamples, isMobile() ? 2 : 4);
+  composer.renderTarget1.samples = samples;
+  composer.renderTarget2.samples = samples;
   composer.addPass(new RenderPass(scene, camera));
   // Conserva el alfa transparente fuera del modelo. El bloom añadía una capa
   // tenue sobre todo el lienzo y oscurecía un nivel RGB el fondo al aparecer.
@@ -100,7 +106,14 @@ function createScene(canvas) {
   });
   handoff.enabled = false;
   composer.addPass(handoff);
-  return { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms, handoff };
+
+  const atmosphere = createAtmosphere({
+    scene, stage, mobile: isMobile(), reduceMotion: reduceMotion.matches
+  });
+  // Sin intro la pieza ya esta en su sitio, asi que el humo entra con ella.
+  atmosphere.intensity.value = wantsIntro ? 0 : 1;
+
+  return { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms, handoff, atmosphere };
 }
 
 // La escala se deduce del ancho visible, no de un numero fijo: en movil el
@@ -144,7 +157,7 @@ function start() {
   }
 
   let introFrame = null;
-  const { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms, handoff } = ctx;
+  const { renderer, scene, camera, composer, stage, tilt, lamp, rim, uniforms, handoff, atmosphere } = ctx;
   let framePose = null;
   let readyForHandoff = false;
   intro?.ended.then(() => { if (!readyForHandoff && introRunning) intro.waiting(); });
@@ -182,14 +195,16 @@ function start() {
     measure();
     const width = Math.max(1, Math.round(rect.width));
     const height = Math.max(1, Math.round(rect.height));
-    const dpr = Math.min(devicePixelRatio, isMobile() ? 1.5 : 2);
+    const dpr = Math.min(devicePixelRatio, 2);
     if (width === lastW && height === lastH && dpr === lastDpr) return;
     lastW = width; lastH = height; lastDpr = dpr;
     camera.aspect = width / height;
     camera.updateProjectionMatrix();
     renderer.setPixelRatio(dpr);
     renderer.setSize(width, height, false);
+    composer.setPixelRatio(dpr);
     composer.setSize(width, height);
+    atmosphere.setSize(camera, dpr);
     if (!introRunning) applyRest();
     else if (intro && !transitioning) matchVideoPose();
   }
@@ -223,8 +238,11 @@ function start() {
     aim.y = ndc.y;
   }
 
+  const spinRate = { x: 0, y: 0 };
+
   function tick() {
     frame = 0;
+    spinRate.x = spinRate.y = 0;
     const delta = Math.min(clock.getDelta(), 0.05);
     const time = Math.max(0, clock.elapsedTime - settledAt);
     uniforms.uTime.value = clock.elapsedTime;
@@ -256,10 +274,15 @@ function start() {
         targetX = baseX * interaction.value + drag.pitch;
       }
       const ease = Math.min(1, delta * (drag.on ? 14 : 2.4));
+      const before = tilt.rotation.y;
+      const beforeX = tilt.rotation.x;
       tilt.rotation.y += (targetY - tilt.rotation.y) * ease;
       tilt.rotation.x += (targetX - tilt.rotation.x) * ease;
+      spinRate.y = (tilt.rotation.y - before) / Math.max(delta, 0.001);
+      spinRate.x = (tilt.rotation.x - beforeX) / Math.max(delta, 0.001);
     }
 
+    atmosphere.update(delta, clock.elapsedTime, spinRate, stage.position, drag.on);
     composer.render();
     if (visible) frame = requestAnimationFrame(tick);
   }
@@ -309,8 +332,13 @@ function start() {
     introRunning = false;
     settledAt = clock.elapsedTime;
     interactionTween?.kill();
-    if (gsap) interactionTween = gsap.to(interaction, { value: 1, duration: 0.65, ease: 'power2.inOut' });
-    else interaction.value = 1;
+    if (gsap) {
+      interactionTween = gsap.to(interaction, { value: 1, duration: 0.65, ease: 'power2.inOut' });
+      gsap.to(atmosphere.intensity, { value: 1, duration: 0.9, ease: 'power2.out', overwrite: true });
+    } else {
+      interaction.value = 1;
+      atmosphere.intensity.value = 1;
+    }
     tilt.rotation.z = 0;
     uniforms.uEnvironmentMix.value = 1;
     uniforms.uBaseMix.value = 0.18;
@@ -376,17 +404,24 @@ function start() {
     // Funde las dos superficies antes de moverlas: el vídeo
     // y WebGL redondean de forma distinta los bordes de los reflejos.
     const transfer = 0.16;
+    const goldStart = transfer + duration;
+    const greenStart = goldStart + 0.55;
     introTimeline = gsap.timeline({ defaults: { ease: 'power2.inOut' }, onUpdate: updateIntroFrame, onComplete: finishIntro });
     introTimeline.to(intro.overlay, { opacity: 0, duration: transfer, ease: 'sine.inOut' }, 0);
     introTimeline
       .to(stage.position, { x: pose.x, y: pose.y, duration }, transfer)
       .to(stage.scale, { x: pose.scale, y: pose.scale, z: pose.scale, duration }, transfer)
       .to(tilt.rotation, { z: 0, duration: 0.55 }, transfer + duration - 0.55)
-      .to(uniforms.uEnvironmentMix, { value: 1, duration: 0.5 }, 0)
-      .to(uniforms.uBaseMix, { value: 0.18, duration: 0.5 }, 0)
-      .to(uniforms.uRim, { value: LOOK.rim, duration: 0.5 }, 0)
-      .to(rim, { intensity: LOOK.rimLight, duration: 0.5 }, 0)
       .to(handoff.uniforms.mixAmount, { value: 0, duration: 0.55 }, transfer + duration - 0.55)
+      // Primero se descubre el metal dorado real. Un giro breve muestra volumen
+      // antes de que cambie la iluminación; la atmósfera entra después.
+      .to(tilt.rotation, { y: 0.09, x: -0.025, duration: 0.55 }, goldStart)
+      .to(tilt.rotation, { y: 0, x: 0, duration: 1.35 }, greenStart)
+      .to(uniforms.uEnvironmentMix, { value: 1, duration: 1.35, ease: 'sine.inOut' }, greenStart)
+      .to(uniforms.uBaseMix, { value: 0.18, duration: 1.35 }, greenStart)
+      .to(uniforms.uRim, { value: LOOK.rim, duration: 0.7 }, greenStart)
+      .to(rim, { intensity: LOOK.rimLight, duration: 0.6 }, greenStart + 0.75)
+      .to(atmosphere.intensity, { value: 1, duration: 1.0, ease: 'sine.inOut' }, greenStart + 0.8)
       .add(releaseContent, isMobile() ? 0.28 : 0.35);
   }
 
@@ -399,17 +434,58 @@ function start() {
     if (!intro) clearTimeout(modelTimeout);
     model = gltf.scene;
     model.traverse(node => { if (node.isMesh) {
-      node.material.normalScale.setScalar(0.15);
+      node.material.normalScale.setScalar(0.065);
       node.material.roughnessMap = null;
-      applySteel(node.material, uniforms, { ...LOOK, tint: '#eeeeee', roughness: 0.22, envIntensity: 1.1 });
+      for (const texture of [node.material.map, node.material.normalMap]) {
+        if (texture) texture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      }
+      applySteel(node.material, uniforms, { ...LOOK, tint: '#eeeeee', roughness: 0.26, envIntensity: 1.1 });
+      node.geometry.computeBoundingBox();
+      const materialBounds = node.geometry.boundingBox;
       const steelShader = node.material.onBeforeCompile;
       node.material.onBeforeCompile = shader => {
         steelShader(shader);
+        shader.uniforms.uSteelMin = { value: materialBounds.min.clone() };
+        shader.uniforms.uSteelSize = { value: materialBounds.getSize(new THREE.Vector3()).max(new THREE.Vector3(0.001, 0.001, 0.001)) };
+        shader.vertexShader = 'uniform vec3 uSteelMin, uSteelSize;\nvarying vec3 vSteelSurface;\n' + shader.vertexShader.replace('#include <begin_vertex>', `
+          #include <begin_vertex>
+          vSteelSurface = (position - uSteelMin) / uSteelSize;
+        `);
+        const transformation = `
+          uniform sampler2D uSiteEnvironment;
+          uniform float uEnvironmentMix;
+          varying vec3 vSteelSurface;
+          float steelWave() {
+            vec3 p = vSteelSurface;
+            // La onda nace abajo a la izquierda y recorre el volumen del metal.
+            return length((p - vec3(0.05,0.12,0.5))*vec3(1.0,0.85,0.2))
+              + sin(p.x*12.0+p.y*8.0)*0.018 + sin(p.y*19.0-p.z*5.0)*0.012;
+          }
+          float steelFront() { return mix(-0.15,1.6,uEnvironmentMix); }
+          float steelGreen() { return 1.0-smoothstep(steelFront()-0.085,steelFront()+0.085,steelWave()); }
+        `;
         const environmentChunk = THREE.ShaderChunk.envmap_physical_pars_fragment.replace(
           /textureCubeUV\( envMap, ([^;]+) \)/g,
-          'mix(textureCubeUV(envMap, $1), textureCubeUV(uSiteEnvironment, $1), uEnvironmentMix)'
+          'mix(textureCubeUV(envMap, $1), textureCubeUV(uSiteEnvironment, $1), steelGreen())'
         );
-        shader.fragmentShader = 'uniform sampler2D uSiteEnvironment;\nuniform float uEnvironmentMix;\n' + shader.fragmentShader.replace('#include <envmap_physical_pars_fragment>', environmentChunk);
+        shader.fragmentShader = transformation + shader.fragmentShader
+          .replace('#include <envmap_physical_pars_fragment>', environmentChunk)
+          .replace('uRimColor * fresnel * uRim', 'uRimColor * fresnel * uRim * steelGreen()')
+          .replace('#include <opaque_fragment>', `
+            float waveDistance = (steelWave()-steelFront())/0.055;
+            float crest = exp(-waveDistance*waveDistance);
+            float activeWave = smoothstep(0.0,0.12,uEnvironmentMix)*(1.0-smoothstep(0.88,1.0,uEnvironmentMix));
+            float grazing = pow(1.0-clamp(abs(dot(normalize(normal),normalize(vViewPosition))),0.0,1.0),2.0);
+            outgoingLight += vec3(0.65,0.95,0.18)*crest*activeWave*(0.14+grazing*0.5);
+            #include <opaque_fragment>
+          `)
+          .replace('#include <roughnessmap_fragment>', `
+            #include <roughnessmap_fragment>
+            // Microacabado satinado, filtrado por la huella del píxel.
+            float grainPhase = vSteelSurface.y*1050.0+sin(vSteelSurface.x*27.0)*2.0;
+            float grainFilter = 1.0-smoothstep(0.4,2.5,fwidth(grainPhase));
+            roughnessFactor = clamp(roughnessFactor+sin(grainPhase)*0.012*grainFilter,0.08,1.0);
+          `);
       };
     } });
 
@@ -428,9 +504,11 @@ function start() {
     if (reduceMotion.matches) {
       tilt.rotation.set(-0.05, -0.3, 0);
       applyRest();
+      atmosphere.intensity.value = 1;
+      atmosphere.update(0, 0, 0);
       composer.render();
       releaseContent();
-      addEventListener('resize', () => { resize(); composer.render(); });
+      addEventListener('resize', () => { resize(); atmosphere.update(0, 0, 0); composer.render(); });
       return;
     }
 
@@ -449,6 +527,14 @@ function start() {
       resize();
     });
 
+    function airPointer(event, active = true) {
+      const x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      const y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(ndc.set(x, y), camera);
+      if (raycaster.ray.intersectPlane(plane, hit)) atmosphere.setPointer(hit.x, hit.y, active);
+    }
+    let press = null;
+    hero.addEventListener('pointerleave', () => atmosphere.setPointer(0, 0, false));
     // Arrastrar para girar la pieza a mano. Los oyentes van en el hero, no en
     // el lienzo: el lienzo esta debajo de .hero-content, asi que escuchando ahi
     // solo se podia agarrar por los bordes que el texto dejaba libres.
@@ -459,12 +545,16 @@ function start() {
       if (target?.closest('a,button,summary,input,textarea,[role="button"]')) return;
       event.preventDefault();   // si no, arrastrar sobre el titular lo selecciona
       drag.on = true; drag.id = event.pointerId;
+      press = { x: event.clientX, y: event.clientY, time: performance.now(), moved: false };
+      airPointer(event);
       drag.x = event.clientX; drag.y = event.clientY;
       hero.setPointerCapture(event.pointerId);
       root.classList.add('ao3d-dragging');
     });
     hero.addEventListener('pointermove', event => {
+      if (!introRunning && (event.pointerType !== 'touch' || drag.on)) airPointer(event);
       if (!drag.on || event.pointerId !== drag.id) return;
+      if (press && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 7) press.moved = true;
       drag.yaw += (event.clientX - drag.x) * 0.007;
       drag.pitch += (event.clientY - drag.y) * 0.007;
       drag.pitch = Math.max(-0.9, Math.min(0.9, drag.pitch));
@@ -473,6 +563,12 @@ function start() {
     });
     const endDrag = event => {
       if (!drag.on || (event && event.pointerId !== drag.id)) return;
+      if (event?.type === 'pointerup' && press && !press.moved && performance.now() - press.time < 450) {
+        airPointer(event);
+        atmosphere.burst(hit.x, hit.y);
+      }
+      press = null;
+      if (!event || event.pointerType === 'touch' || event.type === 'pointercancel') atmosphere.setPointer(0, 0, false);
       drag.on = false; drag.id = null;
       root.classList.remove('ao3d-dragging');
     };
