@@ -9,7 +9,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ACID, LOOK, buildEnvironment, applySteel, makeUniforms } from './sculpture.js?v=9ecd0025';
 
-import { prepareIntro } from './intro.js?v=eec1f2c4';
+import { prepareIntro } from './intro.js?v=2c56723e';
 
 const MODEL = 'assets/ao-sculpture.glb?v=e9ab29ff';
 
