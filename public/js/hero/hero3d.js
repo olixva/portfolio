@@ -10,7 +10,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { ACID, LOOK, GOLD_ENV, SITE_ENV, buildEnvironment, applySteel, applyTransition, makeUniforms } from './sculpture.js?v=bcadf0bc';
 
-import { createAtmosphere } from './atmosphere.js?v=11c3a1bd';
+import { createAtmosphere } from './atmosphere.js?v=4201e66a';
 import { prepareIntro } from './intro.js?v=2c56723e';
 
 const MODEL = 'assets/ao-sculpture.glb?v=e9ab29ff';
