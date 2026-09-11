@@ -37,7 +37,7 @@ const PARTICLE_FRAGMENT = `
 
 export function createAtmosphere({ scene, mobile = false, reduceMotion = false }) {
   const intensity = { value: 0 };
-  const motion = createAirMotion({ count: reduceMotion ? 28 : (mobile ? 68 : 144) });
+  const motion = createAirMotion({ count: reduceMotion ? 28 : (mobile ? 88 : 187) });
   const pointer = { x: 0, y: 0, vx: 0, vy: 0, active: false };
   const target = { x: 0, y: 0, active: false };
   let pointerInitialized = false;
