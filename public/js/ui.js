@@ -18,9 +18,16 @@
         return;
       }
       details.classList.remove('is-expanded');
-      setTimeout(() => {
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        details.open = false;
+        return;
+      }
+      const finishClose = event => {
+        if (event.target !== content || event.propertyName !== 'grid-template-rows') return;
+        content.removeEventListener('transitionend', finishClose);
         if (!details.classList.contains('is-expanded')) details.open = false;
-      }, 390);
+      };
+      content.addEventListener('transitionend', finishClose);
     });
   });
 

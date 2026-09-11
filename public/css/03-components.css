@@ -65,13 +65,14 @@ details>p{font-size:15px;line-height:1.7;margin:6px 0 12px}
 .ring-spin{position:absolute;width:94%;aspect-ratio:1;left:3%;top:50%;margin-top:-47%;border:2px solid #dcff54;border-left-color:#52584a;border-bottom-color:#e9f3cd;border-radius:50%;box-shadow:0 0 12px #dcff5418,inset 0 0 8px #dcff5410;animation:orbit-revolution 16s linear infinite;will-change:transform}
 .publication-link{font-size:14px;margin-bottom:22px;border-bottom:1px solid currentColor;padding-bottom:4px;display:inline-flex;gap:9px;align-items:center;line-height:1.4;min-height:44px}
 .publication-link .brand-icon{width:18px;height:18px}
-.other-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;align-items:start;grid-auto-rows:auto}
-.other-card{padding:28px;border:1px solid var(--line);border-radius:12px;min-width:0;display:flex;flex-direction:column;height:340px;min-height:0}
+.other-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;align-items:stretch;grid-auto-rows:auto}
+.other-card{padding:28px;border:1px solid var(--line);border-radius:12px;min-width:0;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto auto;height:auto;min-height:340px}
 .other-card:has(details[open]){height:auto;min-height:340px}
 .other-card h3{font-size:26px;line-height:1.2;letter-spacing:-.7px;font-weight:500;margin:18px 0;min-height:2.4em;margin-top:8px}
-.other-card>p:not(.participation-status){font-size:16px;color:var(--muted);flex:1}
-.other-card details{border-color:var(--line);margin-top:auto}
-.other-card>.publication-link{font-size:14px;margin:12px 0 0;align-self:flex-start}
+.other-card>p:not(.participation-status){font-size:16px;color:var(--muted);grid-row:3;align-self:start}
+.other-card details{border-color:var(--line);grid-row:5;margin-top:20px}
+.other-card>.publication-link{font-size:14px;grid-row:4;margin:0;align-self:start}
+.publication-placeholder{grid-row:4;height:44px;visibility:hidden}
 .case-art img{position:relative;inset:auto;filter:drop-shadow(0 35px 24px #0004);width:75%;height:100%;max-height:215px;object-fit:contain;transform:none!important;translate:none!important;rotate:none!important;scale:1!important;animation:none!important;transition:none!important}
 .case:hover .case-art img{transform:none!important;translate:none!important;rotate:none!important;scale:1!important;animation:none!important;transition:none!important}
 .portrait-layout{display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:clamp(35px,6vw,100px);align-items:center}
