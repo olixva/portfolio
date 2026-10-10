@@ -1,0 +1,13 @@
+/* Ajustes aislados de Sobre mi y de los fondos de las secciones en movil. */
+.about .section-intro {
+  position: relative;
+  top: -8px;
+}
+
+@media (max-width: 760px) {
+  .journey.section,
+  .education-section.section,
+  .journey-grid > h2 {
+    background-color: var(--dark);
+  }
+}
